@@ -3,6 +3,7 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { addUserMessage, listMessages } from './messages.ts';
 import { transition } from './transition.ts';
 import { createLocalTask, deleteTask, getTask, restoreTask, setRepository } from './tasks.ts';
 
@@ -42,6 +43,8 @@ export function createEngine(opts: EngineOptions) {
     setRepository: (id: number, path: string) => setRepository(ctx, id, path),
     deleteTask: (id: number) => deleteTask(ctx, id),
     restoreTask: (id: number) => restoreTask(ctx, id),
+    addUserMessage: (id: number, content: string) => addUserMessage(ctx, id, content),
+    listMessages: (id: number) => listMessages(ctx, id),
     getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
     close: () => db.$client.close(),

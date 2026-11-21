@@ -4,3 +4,4 @@ export { insertJournal, listJournal, type JournalEntry } from './journal.ts';
 export * as schema from './schema.ts';
 export { getTaskDto, setDeletedAt, setRepoPath } from './tasks.ts';
 export { insertEvent } from './events.ts';
+export { insertMessage, listMessages } from './messages.ts';
