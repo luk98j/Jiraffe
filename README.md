@@ -27,7 +27,9 @@ pnpm dev     # API server on http://127.0.0.1:4317 and the web UI with hot reloa
 pnpm start   # API server only (http://127.0.0.1:4317/api/health); the server does not serve the UI bundle yet
 ```
 
-`pnpm dev` is the way to use the UI: Vite proxies `/api` to the server.
+`pnpm dev` is the way to use the UI: Vite proxies `/api` to the server and rewrites the `Host` and `Origin` headers to the server's address (`packages/web/vite.config.ts`).
+
+The API answers `403` to any request whose `Host` is not `127.0.0.1:<port>` or `localhost:<port>`, or whose `Origin` (when present) is not `http://127.0.0.1:<port>` or `http://localhost:<port>` (DNS-rebinding guard in `packages/server/src/app.ts`). A reverse proxy or another hostname in front of the server is refused unless it rewrites these headers.
 
 | Setting | How |
 |---|---|
@@ -56,9 +58,11 @@ Without configuration the app works with local tasks only and shows "Jira not co
    export JIRA_API_TOKEN="..."
    ```
 
-3. In the app, open Settings and set `jira_base_url` (for example `https://your-site.atlassian.net`). Optionally set `jira_projects`, `jira_ignored_statuses` and `repo_map` (Jira project key to local repository path).
+3. In the app, open Settings and set `jira_base_url` (for example `https://your-site.atlassian.net`). The URL must be `https`; `http` is accepted only for `localhost` and `127.0.0.1` (`packages/core/src/settings.ts`). Optionally set `jira_projects`, `jira_ignored_statuses` and `repo_map` (Jira project key to local repository path).
 
-Tasks assigned to you and not in a Done status category are imported at start and then every 30 minutes (`jira_tasks_sync_minutes`); comments of tasks waiting for you or in later states are read every 30 minutes (`jira_comments_sync_minutes`). Use "Sync now" in Settings to run a task sync immediately.
+Tasks assigned to you and not in a Done status category are imported at start and then every 30 minutes (`jira_tasks_sync_minutes`); comments of tasks waiting for you or in later states are read every 30 minutes (`jira_comments_sync_minutes`). Both intervals accept 1 to 1440 minutes. Use "Sync now" in Settings to run a task sync immediately.
+
+The journal is silent when nothing changed: unchanged tasks get no entry, and a sync that created, updated and closed nothing writes no `sync_run` entry (`packages/engine/src/sync.ts`).
 
 The Jira HTTP client targets Jira Cloud and has only been tested against fixtures, not a real instance. Jira Data Center may need small changes in `packages/jira/src/http.ts`.
 
