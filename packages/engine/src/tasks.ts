@@ -1,6 +1,8 @@
+import type { MessageDto } from '@jiraffe/core';
 import { ConflictError, TaskNotFoundError, ValidationError, type TaskDto } from '@jiraffe/core';
-import { getTaskDto, insertJournal, setDeletedAt, setRepoPath } from '@jiraffe/db';
+import { getTaskDto, insertJournal, listDeletedTaskDtos, listMessages, listTaskDtos, setDeletedAt, setRepoPath } from '@jiraffe/db';
 import { write, type Ctx } from './context.ts';
+import { getSetting } from './settings.ts';
 import { createTask } from './createTask.ts';
 
 export function createLocalTask(
@@ -57,4 +59,21 @@ export function restoreTask(ctx: Ctx, id: number): void {
     insertJournal(tx, { at: now, taskKey: t.key, status: t.status, action: 'task_restored' });
     outbox.changed();
   });
+}
+
+export function listTasks(ctx: Ctx): TaskDto[] {
+  return listTaskDtos(ctx.db);
+}
+
+/** Soft-deleted tasks still inside the retention window (boundary included). */
+export function listDeleted(ctx: Ctx): TaskDto[] {
+  const days = getSetting(ctx, 'retention_days');
+  return listDeletedTaskDtos(ctx.db, new Date(ctx.clock().getTime() - days * 86_400_000).toISOString());
+}
+
+/** Task plus its messages; a soft-deleted task counts as not found. */
+export function getTaskDetail(ctx: Ctx, id: number): { task: TaskDto; messages: MessageDto[] } {
+  const task = getTaskDto(ctx.db, id);
+  if (!task || task.deletedAt) throw new TaskNotFoundError();
+  return { task, messages: listMessages(ctx.db, id) };
 }

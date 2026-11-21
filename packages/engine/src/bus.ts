@@ -43,6 +43,10 @@ export class Bus {
     return this.subscribe('changed', fn);
   }
 
+  listenerCount(topic: 'event' | 'changed'): number {
+    return this.emitter.listenerCount(topic);
+  }
+
   emitEvent(e: DomainEvent): void {
     this.emitter.emit('event', e);
   }

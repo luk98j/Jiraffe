@@ -9,7 +9,7 @@ import { runCommentSync, runTaskSync } from './sync.ts';
 import { runRetention } from './retention.ts';
 import { addUserMessage, listMessages } from './messages.ts';
 import { transition } from './transition.ts';
-import { createLocalTask, deleteTask, getTask, restoreTask, setRepository } from './tasks.ts';
+import { createLocalTask, deleteTask, getTask, getTaskDetail, listDeleted, listTasks, restoreTask, setRepository } from './tasks.ts';
 
 export { Bus, type DomainEvent, type Logger } from './bus.ts';
 export type { Ctx } from './context.ts';
@@ -58,6 +58,10 @@ export function createEngine(opts: EngineOptions) {
     runTaskSync: () => runTaskSync(ctx),
     runCommentSync: () => runCommentSync(ctx),
     syncState: () => ({ ...ctx.sync.state }),
+    version: opts.version,
+    listTasks: () => listTasks(ctx),
+    listDeleted: () => listDeleted(ctx),
+    getTaskDetail: (id: number) => getTaskDetail(ctx, id),
     getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
     async start() {

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { TaskDto } from '@jiraffe/core';
 import type { Db, Tx } from './client.ts';
 import { tasks } from './schema.ts';
@@ -7,11 +7,11 @@ import { tasks } from './schema.ts';
 // analysis run, or newer than task creation when there is none.
 const hasNewComment = sql<number>`exists (
   select 1 from messages m
-  where m.task_id = ${tasks.id}
+  where m.task_id = tasks.id
     and (m.role = 'user' or m.source = 'jira')
     and m.created_at > coalesce(
-      (select max(r.finished_at) from runs r where r.task_id = ${tasks.id} and r.kind = 'analysis'),
-      ${tasks.createdAt})
+      (select max(r.finished_at) from runs r where r.task_id = tasks.id and r.kind = 'analysis'),
+      tasks.created_at)
 )`;
 
 function toDto(r: typeof tasks.$inferSelect & { newComment: number }): TaskDto {
@@ -53,4 +53,22 @@ export function setRepoPath(tx: Db | Tx, id: number, repoPath: string, now: stri
 /** Soft delete (a date) or restore (null). Never touches status. */
 export function setDeletedAt(tx: Db | Tx, id: number, deletedAt: string | null, now: string): void {
   tx.update(tasks).set({ deletedAt, updatedAt: now }).where(eq(tasks.id, id)).run();
+}
+
+/** Board tasks (not deleted), oldest first. */
+export function listTaskDtos(db: Db | Tx): TaskDto[] {
+  return select(db)
+    .where(isNull(tasks.deletedAt))
+    .orderBy(asc(tasks.id))
+    .all()
+    .map((r) => toDto({ ...r.t, newComment: r.newComment }));
+}
+
+/** Soft-deleted tasks deleted at or after `since`. */
+export function listDeletedTaskDtos(db: Db | Tx, since: string): TaskDto[] {
+  return select(db)
+    .where(and(isNotNull(tasks.deletedAt), gte(tasks.deletedAt, since)))
+    .orderBy(asc(tasks.id))
+    .all()
+    .map((r) => toDto({ ...r.t, newComment: r.newComment }));
 }

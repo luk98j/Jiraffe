@@ -1,6 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createEngine } from '@jiraffe/engine';
 import { buildServer, getPort, listen, HOST } from '../src/index.ts';
+
+const newApp = () => buildServer(createEngine({ dbPath: ':memory:', version: '1.2.3', logger: { error() {} } }));
 
 let app: ReturnType<typeof buildServer> | undefined;
 afterEach(async () => {
@@ -10,7 +13,7 @@ afterEach(async () => {
 
 describe('server listening (AC-4)', () => {
   it('binds to 127.0.0.1 only', async () => {
-    app = buildServer({ version: '1.2.3' });
+    app = newApp();
     await listen(app, { JIRAFFE_PORT: '0' });
     const addr = app.server.address() as AddressInfo;
     expect(addr.address).toBe('127.0.0.1');
@@ -19,7 +22,7 @@ describe('server listening (AC-4)', () => {
   });
 
   it('ignores any host override from the environment', async () => {
-    app = buildServer({ version: '1.2.3' });
+    app = newApp();
     await listen(app, { JIRAFFE_PORT: '0', JIRAFFE_HOST: '0.0.0.0', HOST: '0.0.0.0' });
     expect((app.server.address() as AddressInfo).address).toBe('127.0.0.1');
   });
@@ -31,7 +34,7 @@ describe('server listening (AC-4)', () => {
   });
 
   it('serves the health route', async () => {
-    app = buildServer({ version: '1.2.3' });
+    app = newApp();
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, version: '1.2.3' });
