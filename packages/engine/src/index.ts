@@ -4,7 +4,7 @@ import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
 import { transition } from './transition.ts';
-import { createLocalTask, getTask, setRepository } from './tasks.ts';
+import { createLocalTask, deleteTask, getTask, restoreTask, setRepository } from './tasks.ts';
 
 export { Bus, type DomainEvent, type Logger } from './bus.ts';
 export type { Ctx } from './context.ts';
@@ -40,6 +40,8 @@ export function createEngine(opts: EngineOptions) {
     transition: (...args: Parameters<typeof transition> extends [unknown, ...infer R] ? R : never) => transition(ctx, ...args),
     createLocalTask: (input: Parameters<typeof createLocalTask>[1]) => createLocalTask(ctx, input),
     setRepository: (id: number, path: string) => setRepository(ctx, id, path),
+    deleteTask: (id: number) => deleteTask(ctx, id),
+    restoreTask: (id: number) => restoreTask(ctx, id),
     getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
     close: () => db.$client.close(),
