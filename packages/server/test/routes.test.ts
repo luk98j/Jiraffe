@@ -21,7 +21,7 @@ describe('health and errors', () => {
 
   it('maps errors to JSON bodies without internals', async () => {
     const h = makeApp();
-    const bad = await h.app.inject({ method: 'POST', url: '/api/tasks', payload: '{oops', headers: { 'content-type': 'application/json' } });
+    const bad = await h.app.inject({ method: 'POST', url: '/api/tasks', payload: '{oops', headers: { 'content-type': 'application/json', host: '127.0.0.1:4317' } });
     expect(bad.statusCode).toBe(400);
     expect(bad.json().error.code).toBe('bad_request');
     const missing = await h.req('GET', '/api/tasks/999');

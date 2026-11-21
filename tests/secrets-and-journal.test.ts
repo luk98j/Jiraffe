@@ -8,6 +8,7 @@ import { buildServer } from '@jiraffe/server';
 
 const TOKEN = 'tok-MARKER-s3cr3t-7f3a';
 const EMAIL = 'marker.owner@example.test';
+const LOCAL_HOST = { host: '127.0.0.1:4317' };
 const BASE = 'https://example.atlassian.net';
 
 let dir: string;
@@ -52,7 +53,7 @@ describe('secrets never reach the database or logs (AC-74)', () => {
       logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
     });
     const app = buildServer(engine);
-    await app.inject({ method: 'PUT', url: '/api/settings/jira_base_url', payload: { value: BASE } });
+    await app.inject({ headers: LOCAL_HOST, method: 'PUT', url: '/api/settings/jira_base_url', payload: { value: BASE } });
 
     // Flow 1: Jira rejects the credentials.
     const sent: string[] = [];
@@ -60,18 +61,18 @@ describe('secrets never reach the database or logs (AC-74)', () => {
       sent.push(String((init.headers as Record<string, string>).authorization));
       return new Response(`denied for ${TOKEN} and ${EMAIL}`, { status: 401 });
     }) as unknown as typeof fetch;
-    const failed = await app.inject({ method: 'POST', url: '/api/sync' });
+    const failed = await app.inject({ headers: LOCAL_HOST, method: 'POST', url: '/api/sync' });
     expect(failed.json().outcome).toBe('error');
     expect(failed.body).not.toContain(TOKEN);
     expect(sent[0]).toContain('Basic '); // the credentials are really used for the header
 
     // Flow 2: a good sync, then comment sync, local tasks, messages, delete and restore.
     globalThis.fetch = (async () => new Response(searchBody([rawIssue('PROJ-1', 'Imported', 'Body')]), { status: 200 })) as unknown as typeof fetch;
-    expect((await app.inject({ method: 'POST', url: '/api/sync' })).json().outcome).toBe('ok');
-    await app.inject({ method: 'POST', url: '/api/tasks', payload: { title: 'Local', description: 'd', repoPath: '/r' } });
-    await app.inject({ method: 'POST', url: '/api/tasks/2/messages', payload: { content: 'hello' } });
-    await app.inject({ method: 'DELETE', url: '/api/tasks/2' });
-    await app.inject({ method: 'POST', url: '/api/tasks/2/restore' });
+    expect((await app.inject({ headers: LOCAL_HOST, method: 'POST', url: '/api/sync' })).json().outcome).toBe('ok');
+    await app.inject({ headers: LOCAL_HOST, method: 'POST', url: '/api/tasks', payload: { title: 'Local', description: 'd', repoPath: '/r' } });
+    await app.inject({ headers: LOCAL_HOST, method: 'POST', url: '/api/tasks/2/messages', payload: { content: 'hello' } });
+    await app.inject({ headers: LOCAL_HOST, method: 'DELETE', url: '/api/tasks/2' });
+    await app.inject({ headers: LOCAL_HOST, method: 'POST', url: '/api/tasks/2/restore' });
     await app.close();
 
     const state = JSON.stringify([engine.syncState(), engine.readSettings(), engine.listJournal({ limit: 1000 })]);

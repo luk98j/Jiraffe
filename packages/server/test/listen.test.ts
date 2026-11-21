@@ -35,7 +35,7 @@ describe('server listening (AC-4)', () => {
 
   it('serves the health route', async () => {
     app = newApp();
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health', headers: { host: '127.0.0.1:4317' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, version: '1.2.3' });
   });

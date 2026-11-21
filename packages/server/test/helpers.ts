@@ -27,6 +27,7 @@ export function makeApp(opts: Partial<Parameters<typeof createEngine>[0]> = {}):
       const res = await app.inject({
         method: method as 'GET',
         url,
+        headers: { host: '127.0.0.1:4317' },
         ...(body === undefined ? {} : { payload: body as object }),
       });
       let parsed: unknown = null;

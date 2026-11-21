@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import type { AddressInfo } from 'node:net';
 import { AppError, type ApiError } from '@jiraffe/core';
 import type { Engine } from '@jiraffe/engine';
 import { HOST, getPort } from './config.ts';
@@ -15,6 +16,18 @@ const STATUS: Record<string, number> = {
 
 export function buildServer(engine: Engine) {
   const app = Fastify();
+
+  // DNS rebinding guard: only this machine's own pages may talk to the API. The port is the
+  // one actually listening (or the configured one before listen, e.g. in tests using inject).
+  app.addHook('onRequest', async (req, reply) => {
+    const port = (app.server.address() as AddressInfo | null)?.port ?? getPort();
+    const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+    const host = (req.headers.host ?? '').toLowerCase();
+    const origin = req.headers.origin;
+    if (!hosts.includes(host) || (origin !== undefined && !hosts.some((h) => origin === `http://${h}`))) {
+      return reply.code(403).send({ error: { code: 'forbidden', message: 'Forbidden' } } satisfies ApiError);
+    }
+  });
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     if (err instanceof AppError) {
