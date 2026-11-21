@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router';
 import { Board } from './views/Board.tsx';
+import { TaskDetail } from './views/TaskDetail.tsx';
 
 const NAV = [
   ['/', 'Board'],
@@ -24,6 +25,7 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Board />} />
+          <Route path="/tasks/:id" element={<TaskDetail />} />
         </Routes>
       </main>
     </div>
