@@ -6,4 +6,4 @@ export { getTaskDto, setDeletedAt, setRepoPath } from './tasks.ts';
 export { insertEvent } from './events.ts';
 export { insertMessage, listMessages } from './messages.ts';
 export { deleteJournalBefore, deleteTaskRows, findPurgeCandidates, insertTombstone, type PurgeCandidate } from './retention.ts';
-export { hasFinishedAnalysis, listIgnoredJiraKeys, listJiraTasks, markClosedInJira, updateTaskFields, type JiraTaskRow } from './sync.ts';
+export { hasFinishedAnalysis, listCommentSyncTasks, listIgnoredJiraKeys, listJiraCommentIds, listJiraTasks, markClosedInJira, updateTaskFields, type JiraTaskRow } from './sync.ts';

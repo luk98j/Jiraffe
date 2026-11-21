@@ -1,9 +1,12 @@
-import { createHttpJiraClient, buildJql, fetchAllIssues, JiraError, type JiraClient, type JiraIssue } from '@jiraffe/jira';
+import { createHttpJiraClient, buildJql, fetchAllIssues, JiraError, type JiraClient, type JiraComment, type JiraIssue } from '@jiraffe/jira';
 import {
   getTaskDto,
   hasFinishedAnalysis,
   insertJournal,
+  insertMessage,
+  listCommentSyncTasks,
   listIgnoredJiraKeys,
+  listJiraCommentIds,
   listJiraTasks,
   markClosedInJira,
   updateTaskFields,
@@ -11,6 +14,7 @@ import {
 import { write, type Ctx } from './context.ts';
 import { createTask } from './createTask.ts';
 import { getSetting } from './settings.ts';
+import { applyTransition } from './transition.ts';
 
 export type SyncOutcome =
   | { outcome: 'ok'; result: string }
@@ -133,6 +137,49 @@ export function runTaskSync(ctx: Ctx): Promise<SyncOutcome> {
       // Empty syncs are silent: no sync_run row unless something changed.
       const detail = `${created} new, ${updated} updated${closed > 0 ? `, ${closed} closed` : ''}`;
       if (created + updated + closed > 0) {
+        insertJournal(tx, { at: now, action: 'sync_run', detail });
+        outbox.changed();
+      }
+      return detail;
+    });
+  });
+}
+
+export function runCommentSync(ctx: Ctx): Promise<SyncOutcome> {
+  return exclusiveSync(ctx, async () => {
+    const client = resolveClient(ctx);
+
+    // Phase 1: fetch comments, no database writes.
+    const fetched: { taskId: number; comments: JiraComment[] }[] = [];
+    for (const t of listCommentSyncTasks(ctx.db)) {
+      fetched.push({ taskId: t.id, comments: await client.getComments(t.jiraKey) });
+    }
+
+    // Phase 2: apply in one transaction.
+    return write(ctx, (tx, outbox) => {
+      const now = ctx.clock().toISOString();
+      let added = 0;
+      for (const { taskId, comments } of fetched) {
+        const task = getTaskDto(tx, taskId);
+        if (!task || task.deletedAt) continue; // deleted since the fetch
+        const known = listJiraCommentIds(tx, taskId);
+        const fresh = comments.filter((c) => !known.has(c.id));
+        if (fresh.length === 0) continue;
+        for (const c of fresh) {
+          insertMessage(tx, { taskId, role: 'user', source: 'jira', content: c.body, jiraCommentId: c.id, createdAt: c.createdAt });
+        }
+        let status = task.status;
+        if (status === 'waiting_user') {
+          const r = applyTransition(ctx, tx, outbox, taskId, 'user_answered');
+          if (r.changed) status = r.to;
+        }
+        for (let i = 0; i < fresh.length; i++) {
+          insertJournal(tx, { at: now, taskKey: task.key, status, action: 'comment_added', detail: 'source: jira' });
+        }
+        added += fresh.length;
+      }
+      const detail = `comments: ${added} new`;
+      if (added > 0) {
         insertJournal(tx, { at: now, action: 'sync_run', detail });
         outbox.changed();
       }

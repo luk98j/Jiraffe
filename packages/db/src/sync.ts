@@ -1,6 +1,6 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { Db, Tx } from './client.ts';
-import { ignoredJiraKeys, runs, tasks } from './schema.ts';
+import { ignoredJiraKeys, messages, runs, tasks } from './schema.ts';
 
 export interface JiraTaskRow {
   id: number;
@@ -62,4 +62,26 @@ export function updateTaskFields(
 
 export function markClosedInJira(tx: Db | Tx, id: number, now: string): void {
   tx.update(tasks).set({ jiraClosed: true, closedInJiraAt: now, updatedAt: now }).where(eq(tasks.id, id)).run();
+}
+
+const COMMENT_STATUSES = ['waiting_user', 'ready_to_delegate', 'running', 'paused_quota'] as const;
+
+/** Non-deleted Jira tasks whose Jira comments are worth reading. */
+export function listCommentSyncTasks(db: Db | Tx): { id: number; jiraKey: string }[] {
+  return db
+    .select({ id: tasks.id, jiraKey: tasks.jiraKey })
+    .from(tasks)
+    .where(and(eq(tasks.source, 'jira'), isNull(tasks.deletedAt), inArray(tasks.status, COMMENT_STATUSES)))
+    .all() as { id: number; jiraKey: string }[];
+}
+
+export function listJiraCommentIds(db: Db | Tx, taskId: number): Set<string> {
+  return new Set(
+    db
+      .select({ c: messages.jiraCommentId })
+      .from(messages)
+      .where(and(eq(messages.taskId, taskId), isNotNull(messages.jiraCommentId)))
+      .all()
+      .map((r) => r.c as string),
+  );
 }
