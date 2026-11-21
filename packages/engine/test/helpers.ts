@@ -107,3 +107,24 @@ export function rawChildren(raw: Harness['raw'], taskId: number, key: string): v
   raw.prepare("INSERT INTO events (task_id, type, created_at) VALUES (?, 'enqueue', 'x')").run(taskId);
   raw.prepare("INSERT INTO journal (at, task_key, status, action) VALUES ('2026-01-01T00:00:00.000Z', ?, 'new', 'task_created')").run(key);
 }
+
+import type { JiraIssue } from '@jiraffe/jira';
+
+export const BASE_URL = 'https://example.atlassian.net';
+
+export function issue(n: number | string, over: Partial<JiraIssue> = {}): JiraIssue {
+  const key = typeof n === 'number' ? `PROJ-${n}` : n;
+  return {
+    key,
+    projectKey: key.split('-')[0]!,
+    title: `Title ${key}`,
+    description: `Body ${key}`,
+    statusName: 'To Do',
+    statusCategory: 'new',
+    ...over,
+  };
+}
+
+export const journalCount = (h: Harness, action: string) =>
+  (h.raw.prepare('SELECT count(*) c FROM journal WHERE action = ?').get(action) as { c: number }).c;
+export const taskCount = (h: Harness) => (h.raw.prepare('SELECT count(*) c FROM tasks').get() as { c: number }).c;

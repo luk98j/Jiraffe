@@ -1,5 +1,6 @@
 import type { Db, Tx } from '@jiraffe/db';
 import type { JiraClient } from '@jiraffe/jira';
+import type { SyncStateDto } from '@jiraffe/core';
 import { Bus, type DomainEvent, type Logger } from './bus.ts';
 
 export interface Ctx {
@@ -9,6 +10,8 @@ export interface Ctx {
   logger: Logger;
   version: string;
   jiraClient?: JiraClient;
+  /** Mutable in-memory sync state shared by task and comment sync. */
+  sync: { state: SyncStateDto; inFlight: boolean };
 }
 
 /** Collects notifications during a transaction; they are sent only after commit. */

@@ -3,6 +3,7 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { runTaskSync } from './sync.ts';
 import { runRetention } from './retention.ts';
 import { addUserMessage, listMessages } from './messages.ts';
 import { transition } from './transition.ts';
@@ -29,6 +30,10 @@ export function createEngine(opts: EngineOptions) {
     bus: new Bus(logger),
     clock: opts.clock ?? (() => new Date()),
     logger,
+    sync: {
+      inFlight: false,
+      state: { state: 'idle', lastRunAt: null, lastError: null, lastSkippedAt: null, lastResult: null },
+    },
     version: opts.version,
     ...(opts.jiraClient ? { jiraClient: opts.jiraClient } : {}),
   };
@@ -47,6 +52,8 @@ export function createEngine(opts: EngineOptions) {
     addUserMessage: (id: number, content: string) => addUserMessage(ctx, id, content),
     listMessages: (id: number) => listMessages(ctx, id),
     runRetention: (now?: Date) => runRetention(ctx, now),
+    runTaskSync: () => runTaskSync(ctx),
+    syncState: () => ({ ...ctx.sync.state }),
     getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
     close: () => db.$client.close(),
