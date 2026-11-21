@@ -1,5 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router';
 import { Board } from './views/Board.tsx';
+import { Deleted } from './views/Deleted.tsx';
+import { Journal } from './views/Journal.tsx';
 import { TaskDetail } from './views/TaskDetail.tsx';
 
 const NAV = [
@@ -25,6 +27,8 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Board />} />
+          <Route path="/deleted" element={<Deleted />} />
+          <Route path="/journal" element={<Journal />} />
           <Route path="/tasks/:id" element={<TaskDetail />} />
         </Routes>
       </main>
