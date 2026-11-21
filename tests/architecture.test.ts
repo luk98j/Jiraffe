@@ -154,3 +154,25 @@ describe('only the engine writes task status (AC-22)', () => {
     expect(names.sort()).toEqual(['applyStatusChange', 'insertTask']);
   });
 });
+
+describe('English only (AC-76)', () => {
+  // Polish diacritics written as escapes so this file stays free of them.
+  const POLISH = new RegExp('[' + [0x105, 0x107, 0x119, 0x142, 0x144, 0xf3, 0x15b, 0x17a, 0x17c, 0x104, 0x106, 0x118, 0x141, 0x143, 0xd3, 0x15a, 0x179, 0x17b].map((c) => String.fromCharCode(c)).join('') + ']');
+  const SKIP = new Set(['node_modules', 'dist', '.git', 'data', 'runs', 'memory', '.DS_Store', 'pnpm-lock.yaml', 'coverage']);
+
+  function files(dir: string): string[] {
+    return readdirSync(dir).flatMap((name) => {
+      if (SKIP.has(name)) return [];
+      const full = join(dir, name);
+      return statSync(full).isDirectory() ? files(full) : [full];
+    });
+  }
+
+  it('has no Polish diacritics in any project file', () => {
+    const hits = files(ROOT)
+      .filter((f) => !/\.(png|jpe?g|gif|ico|db|woff2?)$/i.test(f))
+      .filter((f) => POLISH.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(ROOT, f));
+    expect(hits).toEqual([]);
+  });
+});

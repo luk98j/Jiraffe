@@ -12,7 +12,8 @@
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "start": "tsx packages/server/src/main.ts",
-    "db:generate": "pnpm --filter @jiraffe/db db:generate"
+    "db:generate": "pnpm --filter @jiraffe/db db:generate",
+    "dev": "pnpm --parallel --filter @jiraffe/server --filter @jiraffe/web run dev"
   },
   "devDependencies": {
     "@jiraffe/core": "workspace:*",
