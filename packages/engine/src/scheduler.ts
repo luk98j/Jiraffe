@@ -5,6 +5,10 @@ import { runCommentSync, runTaskSync } from './sync.ts';
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
+const MAX_TIMEOUT_MS = 2 ** 31 - 1; // larger values make setTimeout fire after 1 ms
+
+/** Second guard behind settings validation. */
+export const clampDelay = (ms: number): number => Math.min(ms, MAX_TIMEOUT_MS);
 
 /**
  * Chained timers: each one re-reads its interval when it re-arms, so a changed
@@ -25,7 +29,7 @@ export function createScheduler(ctx: Ctx) {
           ctx.logger.error(`scheduled ${name} failed`, err);
         }
         arm();
-      }, intervalMs());
+      }, clampDelay(intervalMs()));
       t.unref();
       timers.add(t);
     };

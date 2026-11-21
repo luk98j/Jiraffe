@@ -58,6 +58,28 @@ describe('start sequence (AC-42)', () => {
   });
 });
 
+import { clampDelay } from '../src/scheduler.ts';
+
+describe('timer delay limits', () => {
+  it('clamps a delay to the largest value setTimeout accepts', () => {
+    expect(clampDelay(10 ** 13)).toBe(2 ** 31 - 1);
+    expect(clampDelay(30 * MIN)).toBe(30 * MIN);
+  });
+
+  it.each(['99999999999', '0', '-5', '"x"'])('a stored out-of-range interval (%s) falls back to the default, not a tight loop', async (stored) => {
+    const { jira, h } = setup();
+    await h.engine.start();
+    h.raw.prepare("UPDATE settings SET value_json = ? WHERE key = 'jira_tasks_sync_minutes'").run(stored);
+    await vi.advanceTimersByTimeAsync(30 * MIN); // armed with the old value; re-arms after reading the bad one
+    expect(calls(jira, 'searchPage')).toBe(2);
+    await vi.advanceTimersByTimeAsync(29 * MIN);
+    expect(calls(jira, 'searchPage')).toBe(2);
+    await vi.advanceTimersByTimeAsync(MIN);
+    expect(calls(jira, 'searchPage')).toBe(3);
+    h.engine.stop();
+  });
+});
+
 describe('timers (AC-45, AC-59)', () => {
   it('runs both syncs after 30 minutes', async () => {
     const { jira, h } = setup();
