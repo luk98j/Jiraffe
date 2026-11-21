@@ -3,6 +3,8 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { createScheduler } from './scheduler.ts';
+import { startEngine } from './start.ts';
 import { runCommentSync, runTaskSync } from './sync.ts';
 import { runRetention } from './retention.ts';
 import { addUserMessage, listMessages } from './messages.ts';
@@ -37,6 +39,7 @@ export function createEngine(opts: EngineOptions) {
     version: opts.version,
     ...(opts.jiraClient ? { jiraClient: opts.jiraClient } : {}),
   };
+  const scheduler = createScheduler(ctx);
   return {
     /** Internal context, exposed for engine tests only; the server must not use it. */
     ctx,
@@ -57,7 +60,15 @@ export function createEngine(opts: EngineOptions) {
     syncState: () => ({ ...ctx.sync.state }),
     getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
-    close: () => db.$client.close(),
+    async start() {
+      await startEngine(ctx);
+      scheduler.start();
+    },
+    stop: () => scheduler.stop(),
+    close() {
+      scheduler.stop();
+      db.$client.close();
+    },
   };
 }
 
