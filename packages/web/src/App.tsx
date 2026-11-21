@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router';
 import { Board } from './views/Board.tsx';
+import { useLiveUpdates } from './useLiveUpdates.ts';
 import { useSync } from './queries.ts';
 import { Settings } from './views/Settings.tsx';
 import { Deleted } from './views/Deleted.tsx';
@@ -14,6 +15,7 @@ const NAV = [
 ] as const;
 
 export function App() {
+  useLiveUpdates();
   const sync = useSync();
   return (
     <div className="app">
