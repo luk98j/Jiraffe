@@ -3,6 +3,7 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { createLocalTask, getTask, setRepository } from './tasks.ts';
 
 export { Bus, type DomainEvent, type Logger } from './bus.ts';
 export type { Ctx } from './context.ts';
@@ -35,6 +36,9 @@ export function createEngine(opts: EngineOptions) {
     readSettings: () => readSettings(ctx),
     getSetting: <K extends Parameters<typeof getSetting>[1]>(key: K) => getSetting(ctx, key),
     updateSetting: (key: string, value: unknown) => updateSetting(ctx, key, value),
+    createLocalTask: (input: Parameters<typeof createLocalTask>[1]) => createLocalTask(ctx, input),
+    setRepository: (id: number, path: string) => setRepository(ctx, id, path),
+    getTask: (id: number) => getTask(ctx, id),
     listJournal: (f: { taskKey?: string; action?: string; limit?: number }) => listJournal(db, f),
     close: () => db.$client.close(),
   };

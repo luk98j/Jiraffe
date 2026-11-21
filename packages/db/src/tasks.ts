@@ -1,0 +1,56 @@
+import { eq, sql } from 'drizzle-orm';
+import type { TaskDto } from '@jiraffe/core';
+import type { Db, Tx } from './client.ts';
+import { tasks } from './schema.ts';
+
+// "New comment" (A10): a user or Jira message newer than the latest finished
+// analysis run, or newer than task creation when there is none.
+const hasNewComment = sql<number>`exists (
+  select 1 from messages m
+  where m.task_id = ${tasks.id}
+    and (m.role = 'user' or m.source = 'jira')
+    and m.created_at > coalesce(
+      (select max(r.finished_at) from runs r where r.task_id = ${tasks.id} and r.kind = 'analysis'),
+      ${tasks.createdAt})
+)`;
+
+function toDto(r: typeof tasks.$inferSelect & { newComment: number }): TaskDto {
+  return {
+    id: r.id,
+    source: r.source,
+    key: (r.jiraKey ?? r.localKey) as string,
+    jiraKey: r.jiraKey,
+    localKey: r.localKey,
+    title: r.title,
+    body: r.body,
+    repoPath: r.repoPath,
+    status: r.status,
+    statusBeforePause: r.statusBeforePause,
+    priority: r.priority,
+    pauseReason: r.pauseReason,
+    resumeAt: r.resumeAt,
+    jiraClosed: r.jiraClosed,
+    bodyChangedAfterAnalysis: r.bodyChangedAfterAnalysis,
+    hasNewComment: r.newComment === 1,
+    closedInJiraAt: r.closedInJiraAt,
+    deletedAt: r.deletedAt,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+const select = (db: Db | Tx) => db.select({ t: tasks, newComment: hasNewComment }).from(tasks);
+
+export function getTaskDto(db: Db | Tx, id: number): TaskDto | undefined {
+  const r = select(db).where(eq(tasks.id, id)).get();
+  return r && toDto({ ...r.t, newComment: r.newComment });
+}
+
+export function setRepoPath(tx: Db | Tx, id: number, repoPath: string, now: string): void {
+  tx.update(tasks).set({ repoPath, updatedAt: now }).where(eq(tasks.id, id)).run();
+}
+
+/** Soft delete (a date) or restore (null). Never touches status. */
+export function setDeletedAt(tx: Db | Tx, id: number, deletedAt: string | null, now: string): void {
+  tx.update(tasks).set({ deletedAt, updatedAt: now }).where(eq(tasks.id, id)).run();
+}
