@@ -5,3 +5,4 @@ export * as schema from './schema.ts';
 export { getTaskDto, setDeletedAt, setRepoPath } from './tasks.ts';
 export { insertEvent } from './events.ts';
 export { insertMessage, listMessages } from './messages.ts';
+export { deleteJournalBefore, deleteTaskRows, findPurgeCandidates, insertTombstone, type PurgeCandidate } from './retention.ts';
