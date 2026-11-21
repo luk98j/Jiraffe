@@ -61,6 +61,24 @@ describe('settings schema', () => {
     expect(parseSetting('jira_base_url', '')).toEqual({ ok: true, value: '' });
   });
 
+  it('requires https for jira_base_url, allowing http only for localhost', () => {
+    for (const bad of ['http://evil.example', 'http://localhost.evil.com', 'http://127.0.0.1.evil.com', 'ftp://x', 'https://', 'not a url', 'javascript:alert(1)']) {
+      expect(parseSetting('jira_base_url', bad).ok, bad).toBe(false);
+    }
+    expect(parseSetting('jira_base_url', 'https://x.atlassian.net/')).toEqual({ ok: true, value: 'https://x.atlassian.net' });
+    expect(parseSetting('jira_base_url', 'https://jira.corp.example/jira')).toEqual({ ok: true, value: 'https://jira.corp.example/jira' });
+    expect(parseSetting('jira_base_url', 'http://localhost:8080')).toEqual({ ok: true, value: 'http://localhost:8080' });
+    expect(parseSetting('jira_base_url', 'http://127.0.0.1:8080/')).toEqual({ ok: true, value: 'http://127.0.0.1:8080' });
+    expect(parseSetting('jira_base_url', '')).toEqual({ ok: true, value: '' });
+  });
+
+  it.each(['jira_tasks_sync_minutes', 'jira_comments_sync_minutes'] as const)('limits %s to 1440 minutes', (key) => {
+    expect(parseSetting(key, 1440)).toEqual({ ok: true, value: 1440 });
+    expect(parseSetting(key, 1441).ok).toBe(false);
+    expect(parseSetting(key, 99_999_999_999).ok).toBe(false);
+    expect(parseSetting(key, 0).ok).toBe(false);
+  });
+
   it('normalises jira_ignored_statuses', () => {
     expect(parseSetting('jira_ignored_statuses', [' Blocked ', '', 'Blocked', "Won't do"])).toEqual({
       ok: true,

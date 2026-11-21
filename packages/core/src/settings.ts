@@ -3,10 +3,23 @@ import { z } from 'zod';
 const posInt = z.number().int().min(1);
 const nonEmpty = z.string().trim().min(1);
 
+const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+
+/** Credentials are sent to this URL, so it must be https (http only for a local test server). */
+function isAllowedBaseUrl(v: string): boolean {
+  if (v === '') return true;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' || (u.protocol === 'http:' && LOCAL_HOSTS.includes(u.hostname));
+  } catch {
+    return false;
+  }
+}
+
 const url = z
   .string()
   .trim()
-  .refine((v) => v === '' || /^https?:\/\/\S+$/.test(v), 'Must be empty or an http(s) URL')
+  .refine(isAllowedBaseUrl, 'Must be empty or an https URL (http is allowed only for localhost)')
   .transform((v) => v.replace(/\/+$/, ''));
 
 interface Def<S extends z.ZodType> {
@@ -38,8 +51,8 @@ export const SETTINGS = {
     default: [] as string[],
     input: 'json',
   }),
-  jira_tasks_sync_minutes: def({ schema: posInt, default: 30, input: 'number' }),
-  jira_comments_sync_minutes: def({ schema: posInt, default: 30, input: 'number' }),
+  jira_tasks_sync_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
+  jira_comments_sync_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
   repo_map: def({ schema: z.record(z.string(), nonEmpty), default: {} as Record<string, string>, input: 'json' }),
   worktrees_dir: def({ schema: nonEmpty, default: '../.worktrees', input: 'text' }),
   allowed_tools: def({
