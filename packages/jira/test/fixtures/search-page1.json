@@ -1,0 +1,30 @@
+{
+  "issues": [
+    {
+      "key": "PROJ-1",
+      "fields": {
+        "summary": "First issue",
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            { "type": "paragraph", "content": [{ "type": "text", "text": "Hello " }, { "type": "text", "text": "world" }] },
+            { "type": "paragraph", "content": [{ "type": "text", "text": "Second line" }] }
+          ]
+        },
+        "status": { "name": "To Do", "statusCategory": { "key": "new" } },
+        "project": { "key": "PROJ" }
+      }
+    },
+    {
+      "key": "PROJ-2",
+      "fields": {
+        "summary": "No description",
+        "description": null,
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate" } },
+        "project": { "key": "PROJ" }
+      }
+    }
+  ],
+  "nextPageToken": "tok-2"
+}
