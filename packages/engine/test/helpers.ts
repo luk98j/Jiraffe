@@ -1,3 +1,4 @@
+import { expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,4 +36,32 @@ export function makeEngine(opts: Partial<Parameters<typeof createEngine>[0]> = {
 
 export function disposeAll(): void {
   for (const h of open.splice(0)) h.dispose();
+}
+
+const PATHS: Record<string, string[]> = {
+  new: [],
+  queued_analysis: ['enqueue'],
+  analysing: ['enqueue', 'analysis_started'],
+  waiting_user: ['enqueue', 'analysis_started', 'analysis_needs_info'],
+  ready_to_delegate: ['enqueue', 'analysis_started', 'analysis_ready'],
+  delegated: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate'],
+  running: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started'],
+  review: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started', 'execution_done'],
+  done: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started', 'execution_done', 'review_accepted'],
+  failed: ['enqueue', 'analysis_started', 'failed'],
+  paused_quota: ['enqueue', 'analysis_started', 'quota'],
+  cancelled: ['cancel'],
+};
+
+/** Creates a local task and walks it to `status` through real transitions. */
+export function newTaskIn(engine: Engine, status: string, pausedFrom: 'analysing' | 'running' = 'analysing'): number {
+  const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath: '/repos/a' });
+  const path =
+    status === 'paused_quota' && pausedFrom === 'running'
+      ? [...PATHS.running!, 'credit_limit']
+      : PATHS[status];
+  if (!path) throw new Error(`unknown status ${status}`);
+  for (const event of path) engine.transition(task.id, event as never);
+  expect(engine.getTask(task.id).status).toBe(status);
+  return task.id;
 }

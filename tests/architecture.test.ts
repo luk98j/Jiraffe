@@ -116,3 +116,41 @@ describe('dependency rules (AC-3)', () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe('only the engine writes task status (AC-22)', () => {
+  const srcFiles = PACKAGES.flatMap((pkg) => {
+    try {
+      return walk(join(ROOT, 'packages', pkg, 'src'));
+    } catch {
+      return [];
+    }
+  }).map((f) => ({ rel: relative(ROOT, f), text: readFileSync(f, 'utf8') }));
+  const WRITER = 'packages/db/src/taskStatus.ts';
+
+  it('imports @jiraffe/db/status-writer only from transition.ts and createTask.ts', () => {
+    const users = srcFiles.filter((f) => f.rel !== WRITER && f.text.includes('@jiraffe/db/status-writer')).map((f) => f.rel);
+    expect(users.sort()).toEqual(['packages/engine/src/createTask.ts', 'packages/engine/src/transition.ts']);
+  });
+
+  it('has no UPDATE tasks or insert(tasks) outside the status writer', () => {
+    const bad = srcFiles.filter(
+      (f) => f.rel !== WRITER && (/UPDATE\s+tasks/i.test(f.text) || /insert\(\s*tasks\s*\)/.test(f.text)),
+    );
+    expect(bad.map((f) => f.rel)).toEqual([]);
+  });
+
+  it('has no .set({...}) touching status columns outside the status writer', () => {
+    const bad = srcFiles.filter(
+      (f) =>
+        f.rel !== WRITER &&
+        /\.set\(\s*\{[^}]*\b(status|statusBeforePause|pauseReason|resumeAt)\b/.test(f.text),
+    );
+    expect(bad.map((f) => f.rel)).toEqual([]);
+  });
+
+  it('exports exactly insertTask and applyStatusChange from the status writer', () => {
+    const text = srcFiles.find((f) => f.rel === WRITER)!.text;
+    const names = [...text.matchAll(/^export\s+(?:async\s+)?function\s+(\w+)/gm)].map((m) => m[1]);
+    expect(names.sort()).toEqual(['applyStatusChange', 'insertTask']);
+  });
+});

@@ -3,6 +3,7 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { transition } from './transition.ts';
 import { createLocalTask, getTask, setRepository } from './tasks.ts';
 
 export { Bus, type DomainEvent, type Logger } from './bus.ts';
@@ -36,6 +37,7 @@ export function createEngine(opts: EngineOptions) {
     readSettings: () => readSettings(ctx),
     getSetting: <K extends Parameters<typeof getSetting>[1]>(key: K) => getSetting(ctx, key),
     updateSetting: (key: string, value: unknown) => updateSetting(ctx, key, value),
+    transition: (...args: Parameters<typeof transition> extends [unknown, ...infer R] ? R : never) => transition(ctx, ...args),
     createLocalTask: (input: Parameters<typeof createLocalTask>[1]) => createLocalTask(ctx, input),
     setRepository: (id: number, path: string) => setRepository(ctx, id, path),
     getTask: (id: number) => getTask(ctx, id),
