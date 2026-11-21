@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router';
+import { NavLink, Route, Routes } from 'react-router';
+import { Board } from './views/Board.tsx';
 
 const NAV = [
   ['/', 'Board'],
@@ -10,7 +11,7 @@ const NAV = [
 export function App() {
   return (
     <div className="app">
-      <header>
+      <header className="top">
         <h1>Jiraffe</h1>
         <nav>
           {NAV.map(([to, label]) => (
@@ -20,7 +21,11 @@ export function App() {
           ))}
         </nav>
       </header>
-      <main />
+      <main>
+        <Routes>
+          <Route path="/" element={<Board />} />
+        </Routes>
+      </main>
     </div>
   );
 }

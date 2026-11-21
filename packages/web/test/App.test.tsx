@@ -1,15 +1,10 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { App } from '../src/App.tsx';
+import { renderApp } from './helpers.tsx';
 
-describe('App skeleton', () => {
+describe('App shell', () => {
   it('renders the title and the navigation', () => {
-    render(
-      <MemoryRouter>
-        <App />
-      </MemoryRouter>,
-    );
+    renderApp('/', () => undefined);
     expect(screen.getByRole('heading', { name: 'Jiraffe' })).toBeInTheDocument();
     for (const name of ['Board', 'Deleted', 'Journal', 'Settings']) {
       expect(screen.getByRole('link', { name })).toBeInTheDocument();
