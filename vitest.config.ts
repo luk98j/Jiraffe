@@ -15,6 +15,7 @@ export default defineConfig({
       pkg('engine'),
       pkg('jira'),
       pkg('server'),
+      'packages/web',
     ],
   },
 });
