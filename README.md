@@ -46,6 +46,11 @@ pnpm build       # builds the web bundle into packages/web/dist
 
 Tests never reach the network: `fetch` is replaced by a stub that throws, and `JIRA_*` variables are removed from the environment.
 
+GitHub Actions runs `pnpm build`, `pnpm typecheck` and `pnpm test` for pull requests
+targeting `main` and pushes to `main`. The workflow uses Node.js from `.nvmrc`,
+pnpm from `package.json`, and a frozen lockfile. It needs no Jira credentials.
+You can also start it manually from the Actions tab after it is merged.
+
 ## Connecting Jira (optional, later)
 
 Without configuration the app works with local tasks only and shows "Jira not configured".
