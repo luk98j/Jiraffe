@@ -9,3 +9,7 @@ data/
 .env*
 .DS_Store
 *.tsbuildinfo
+
+# Local orchestration run files and memory, never committed
+runs/
+memory/
