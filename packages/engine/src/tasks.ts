@@ -1,6 +1,14 @@
 import type { MessageDto } from '@jiraffe/core';
 import { ConflictError, TaskNotFoundError, ValidationError, type TaskDto } from '@jiraffe/core';
-import { getTaskDto, insertJournal, listDeletedTaskDtos, listMessages, listTaskDtos, setDeletedAt, setRepoPath } from '@jiraffe/db';
+import {
+  getTaskDto,
+  insertJournal,
+  listDeletedTaskDtos,
+  listMessages,
+  listTaskDtos,
+  setDeletedAt,
+  setRepoPath,
+} from '@jiraffe/db';
 import { write, type Ctx } from './context.ts';
 import { getSetting } from './settings.ts';
 import { createTask } from './createTask.ts';
@@ -68,7 +76,10 @@ export function listTasks(ctx: Ctx): TaskDto[] {
 /** Soft-deleted tasks still inside the retention window (boundary included). */
 export function listDeleted(ctx: Ctx): TaskDto[] {
   const days = getSetting(ctx, 'retention_days');
-  return listDeletedTaskDtos(ctx.db, new Date(ctx.clock().getTime() - days * 86_400_000).toISOString());
+  return listDeletedTaskDtos(
+    ctx.db,
+    new Date(ctx.clock().getTime() - days * 86_400_000).toISOString(),
+  );
 }
 
 /** Task plus its messages; a soft-deleted task counts as not found. */

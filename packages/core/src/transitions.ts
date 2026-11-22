@@ -54,10 +54,12 @@ export function resolveTransition(
   statusBeforePause: Status | null,
 ): Resolution {
   if (!STATUSES.includes(from)) throw new InvalidTransitionError(`Unknown status "${from}"`);
-  if (!TRANSITION_EVENTS.includes(event)) throw new InvalidTransitionError(`Unknown event "${event}"`);
+  if (!TRANSITION_EVENTS.includes(event))
+    throw new InvalidTransitionError(`Unknown event "${event}"`);
 
   if (event === 'resume') {
-    if (from === 'paused_quota' && statusBeforePause) return { kind: 'move', to: statusBeforePause };
+    if (from === 'paused_quota' && statusBeforePause)
+      return { kind: 'move', to: statusBeforePause };
   } else if (event === 'cancel') {
     if (!TERMINAL.includes(from)) return { kind: 'move', to: 'cancelled' };
   } else {

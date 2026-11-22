@@ -15,7 +15,9 @@ export async function request<T>(method: string, url: string, body?: unknown): P
   try {
     res = await fetch(url, {
       method,
-      ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      ...(body === undefined
+        ? {}
+        : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
   } catch {
     throw new ApiRequestError(NETWORK_ERROR);

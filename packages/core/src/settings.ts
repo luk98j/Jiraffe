@@ -53,7 +53,11 @@ export const SETTINGS = {
   }),
   jira_tasks_sync_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
   jira_comments_sync_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
-  repo_map: def({ schema: z.record(z.string(), nonEmpty), default: {} as Record<string, string>, input: 'json' }),
+  repo_map: def({
+    schema: z.record(z.string(), nonEmpty),
+    default: {} as Record<string, string>,
+    input: 'json',
+  }),
   worktrees_dir: def({ schema: nonEmpty, default: '../.worktrees', input: 'text' }),
   allowed_tools: def({
     schema: z.array(nonEmpty),
@@ -61,7 +65,11 @@ export const SETTINGS = {
     input: 'json',
   }),
   retention_days: def({ schema: posInt, default: 28, input: 'number' }),
-  journal_retention_days: def({ schema: posInt.nullable(), default: null as number | null, input: 'number' }),
+  journal_retention_days: def({
+    schema: posInt.nullable(),
+    default: null as number | null,
+    input: 'number',
+  }),
   local_task_counter: def({
     schema: z.number().int().min(0),
     default: 0,

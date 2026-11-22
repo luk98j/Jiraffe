@@ -9,13 +9,17 @@ describe('write() outbox', () => {
     const h = makeEngine();
     const seen: string[] = [];
     h.engine.bus.onEvent((e) => {
-      const row = h.raw.prepare("SELECT value_json FROM settings WHERE key = 'x'").get() as { value_json: string };
+      const row = h.raw.prepare("SELECT value_json FROM settings WHERE key = 'x'").get() as {
+        value_json: string;
+      };
       seen.push(`${e.type}:${row.value_json}`);
     });
     let changed = 0;
     h.engine.bus.onChanged(() => changed++);
     write(h.engine.ctx, (_tx, outbox) => {
-      h.engine.ctx.db.$client.prepare("INSERT INTO settings (key, value_json) VALUES ('x', '1')").run();
+      h.engine.ctx.db.$client
+        .prepare("INSERT INTO settings (key, value_json) VALUES ('x', '1')")
+        .run();
       outbox.emitEvent({ taskId: 1, type: 'enqueue' });
       outbox.changed();
       expect(seen).toEqual([]);
@@ -31,7 +35,9 @@ describe('write() outbox', () => {
     h.engine.bus.onChanged(() => seen.push('changed'));
     expect(() =>
       write(h.engine.ctx, (_tx, outbox) => {
-        h.engine.ctx.db.$client.prepare("INSERT INTO settings (key, value_json) VALUES ('x', '1')").run();
+        h.engine.ctx.db.$client
+          .prepare("INSERT INTO settings (key, value_json) VALUES ('x', '1')")
+          .run();
         outbox.emitEvent({ taskId: 1, type: 'enqueue' });
         outbox.changed();
         throw new Error('boom');

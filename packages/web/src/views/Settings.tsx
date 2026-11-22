@@ -49,12 +49,51 @@ function Row({ name, stored, readOnly }: { name: SettingKey; stored: unknown; re
   return (
     <div className="setting-row">
       <label htmlFor={id}>{name}</label>
-      {kind === 'boolean' && <input id={id} type="checkbox" checked={draft === true} disabled={readOnly} onChange={(e) => setDraft(e.target.checked)} />}
-      {kind === 'number' && <input id={id} type="number" value={String(draft)} readOnly={readOnly} onChange={(e) => setDraft(e.target.value)} />}
-      {kind === 'text' && <input id={id} value={String(draft)} readOnly={readOnly} onChange={(e) => setDraft(e.target.value)} />}
-      {kind === 'json' && <textarea id={id} rows={3} value={String(draft)} readOnly={readOnly} onChange={(e) => setDraft(e.target.value)} />}
-      {readOnly ? <small>Read-only</small> : <button type="button" onClick={submit} disabled={save.isPending}>{`Save ${name}`}</button>}
-      {status && <span role={status.ok ? 'status' : undefined} className={status.ok ? 'ok' : 'error'}>{status.text}</span>}
+      {kind === 'boolean' && (
+        <input
+          id={id}
+          type="checkbox"
+          checked={draft === true}
+          disabled={readOnly}
+          onChange={(e) => setDraft(e.target.checked)}
+        />
+      )}
+      {kind === 'number' && (
+        <input
+          id={id}
+          type="number"
+          value={String(draft)}
+          readOnly={readOnly}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+      {kind === 'text' && (
+        <input
+          id={id}
+          value={String(draft)}
+          readOnly={readOnly}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+      {kind === 'json' && (
+        <textarea
+          id={id}
+          rows={3}
+          value={String(draft)}
+          readOnly={readOnly}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+      {readOnly ? (
+        <small>Read-only</small>
+      ) : (
+        <button type="button" onClick={submit} disabled={save.isPending}>{`Save ${name}`}</button>
+      )}
+      {status && (
+        <span role={status.ok ? 'status' : undefined} className={status.ok ? 'ok' : 'error'}>
+          {status.text}
+        </span>
+      )}
     </div>
   );
 }
@@ -68,8 +107,16 @@ export function SyncPanel() {
       <h3>Jira sync</h3>
       {s?.state === 'not_configured' && <p>Jira not configured</p>}
       {s?.state === 'error' && <p className="error">{s.lastError}</p>}
-      {s && <p>State: {s.state}{s.lastRunAt ? `, last run ${s.lastRunAt}` : ''}{s.lastResult ? ` (${s.lastResult})` : ''}</p>}
-      <button type="button" onClick={() => run.mutate(undefined)} disabled={run.isPending}>Sync now</button>
+      {s && (
+        <p>
+          State: {s.state}
+          {s.lastRunAt ? `, last run ${s.lastRunAt}` : ''}
+          {s.lastResult ? ` (${s.lastResult})` : ''}
+        </p>
+      )}
+      <button type="button" onClick={() => run.mutate(undefined)} disabled={run.isPending}>
+        Sync now
+      </button>
     </section>
   );
 }
@@ -80,13 +127,25 @@ export function Settings() {
     <section>
       <h2>Settings</h2>
       <SyncPanel />
-      {q.error && <div role="alert" className="error">{q.error.message}</div>}
+      {q.error && (
+        <div role="alert" className="error">
+          {q.error.message}
+        </div>
+      )}
       {q.data?.problems.map((p) => (
-        <div key={p.key} className="error">{p.key}: {p.message}</div>
+        <div key={p.key} className="error">
+          {p.key}: {p.message}
+        </div>
       ))}
-      {q.data && SETTING_KEYS.map((k) => (
-        <Row key={k} name={k} stored={q.data.values[k]} readOnly={q.data.readOnly.includes(k) || 'readOnly' in SETTINGS[k]} />
-      ))}
+      {q.data &&
+        SETTING_KEYS.map((k) => (
+          <Row
+            key={k}
+            name={k}
+            stored={q.data.values[k]}
+            readOnly={q.data.readOnly.includes(k) || 'readOnly' in SETTINGS[k]}
+          />
+        ))}
     </section>
   );
 }

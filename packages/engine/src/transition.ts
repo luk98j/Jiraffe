@@ -44,14 +44,24 @@ export function applyTransition(
   applyStatusChange(tx, taskId, {
     status: to,
     statusBeforePause: entersPause ? from : event === 'resume' ? null : task.statusBeforePause,
-    pauseReason: entersPause ? (opts.pauseReason ?? null) : event === 'resume' ? null : task.pauseReason,
+    pauseReason: entersPause
+      ? (opts.pauseReason ?? null)
+      : event === 'resume'
+        ? null
+        : task.pauseReason,
     resumeAt: entersPause ? (opts.resumeAt ?? null) : event === 'resume' ? null : task.resumeAt,
     ...(event === 'reanalyse' ? { bodyChangedAfterAnalysis: false as const } : {}),
     updatedAt: now,
   });
   insertEvent(tx, { taskId, type: event, payload: { from, to }, createdAt: now });
   // The journal row goes last so a failure here proves the whole change rolls back.
-  insertJournal(tx, { at: now, taskKey: task.key, status: to, action: 'status_changed', detail: `${from} to ${to}` });
+  insertJournal(tx, {
+    at: now,
+    taskKey: task.key,
+    status: to,
+    action: 'status_changed',
+    detail: `${from} to ${to}`,
+  });
   outbox.emitEvent({ taskId, type: event, from, to });
   outbox.changed();
   return { changed: true, from, to };

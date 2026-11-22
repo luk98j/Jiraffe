@@ -11,7 +11,8 @@ async function imported(...issues: ReturnType<typeof issue>[]) {
   h.engine.updateSetting('jira_base_url', BASE_URL);
   jira.setIssues(issues);
   await h.engine.runTaskSync();
-  const id = (key: string) => (h.raw.prepare('SELECT id FROM tasks WHERE jira_key = ?').get(key) as { id: number }).id;
+  const id = (key: string) =>
+    (h.raw.prepare('SELECT id FROM tasks WHERE jira_key = ?').get(key) as { id: number }).id;
   return { jira, h, id };
 }
 const row = (h: ReturnType<typeof makeEngine>, id: number) =>
@@ -28,10 +29,21 @@ describe('updating from Jira (AC-32, AC-35)', () => {
     now = '2026-11-22T10:00:00.000Z';
     jira.setIssues([issue(1, { title: 'New secret title', description: 'New secret body' })]);
     await h.engine.runTaskSync();
-    expect(row(h, t)).toMatchObject({ title: 'New secret title', body: 'New secret body', status: 'queued_analysis', last_synced_at: now });
+    expect(row(h, t)).toMatchObject({
+      title: 'New secret title',
+      body: 'New secret body',
+      status: 'queued_analysis',
+      last_synced_at: now,
+    });
     expect(h.raw.prepare('SELECT count(*) c FROM messages').get()).toEqual(messages);
     const rows = h.engine.listJournal({ action: 'task_updated_from_jira' });
-    expect(rows).toEqual([expect.objectContaining({ taskKey: 'PROJ-1', status: 'queued_analysis', detail: 'title, body' })]);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        taskKey: 'PROJ-1',
+        status: 'queued_analysis',
+        detail: 'title, body',
+      }),
+    ]);
     expect(JSON.stringify(rows)).not.toContain('secret');
     expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe('0 new, 1 updated');
   });
@@ -62,7 +74,11 @@ describe('body_changed_after_analysis (AC-33, AC-34)', () => {
   it('sets the flag when an analysis run has finished', async () => {
     const { jira, h, id } = await imported(issue(1));
     const t = id('PROJ-1');
-    h.raw.prepare("INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', '2026-11-21T09:00:00.000Z')").run(t);
+    h.raw
+      .prepare(
+        "INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', '2026-11-21T09:00:00.000Z')",
+      )
+      .run(t);
     jira.setIssues([issue(1, { description: 'changed' })]);
     await h.engine.runTaskSync();
     expect(row(h, t).body_changed_after_analysis).toBe(1);
@@ -79,7 +95,9 @@ describe('body_changed_after_analysis (AC-33, AC-34)', () => {
 
   it('a title-only change does not set the flag', async () => {
     const { jira, h, id } = await imported(issue(1));
-    h.raw.prepare("INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', 'x')").run(id('PROJ-1'));
+    h.raw
+      .prepare("INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', 'x')")
+      .run(id('PROJ-1'));
     jira.setIssues([issue(1, { title: 'new title' })]);
     await h.engine.runTaskSync();
     expect(row(h, id('PROJ-1')).body_changed_after_analysis).toBe(0);
@@ -98,13 +116,21 @@ describe('closed in Jira (AC-36)', () => {
       return { ...page, issues: page.issues.filter((i) => i.statusCategory !== 'done') };
     };
     await h.engine.runTaskSync();
-    expect(jira.calls.some((c) => c.method === 'getIssues' && JSON.stringify(c.args) === '[["PROJ-2"]]')).toBe(true);
-    expect(row(h, id('PROJ-2'))).toMatchObject({ jira_closed: 1, closed_in_jira_at: '2026-11-25T08:30:00.000Z', status: 'new' });
+    expect(
+      jira.calls.some((c) => c.method === 'getIssues' && JSON.stringify(c.args) === '[["PROJ-2"]]'),
+    ).toBe(true);
+    expect(row(h, id('PROJ-2'))).toMatchObject({
+      jira_closed: 1,
+      closed_in_jira_at: '2026-11-25T08:30:00.000Z',
+      status: 'new',
+    });
     expect(row(h, id('PROJ-1')).jira_closed).toBe(0);
     expect(h.engine.listJournal({ action: 'closed_in_jira' })).toEqual([
       expect.objectContaining({ taskKey: 'PROJ-2', status: 'new' }),
     ]);
-    expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe('0 new, 0 updated, 1 closed');
+    expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe(
+      '0 new, 0 updated, 1 closed',
+    );
   });
 
   it('flags a task whose status is now ignored, and does not journal it twice', async () => {

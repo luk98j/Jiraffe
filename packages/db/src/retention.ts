@@ -13,16 +13,31 @@ export interface PurgeCandidate {
 /** Deleted before the cutoff, or closed in Jira before it (never while running). Strictly older than the cutoff. */
 export function findPurgeCandidates(db: Db | Tx, cutoff: string): PurgeCandidate[] {
   return db
-    .select({ id: tasks.id, jiraKey: tasks.jiraKey, localKey: tasks.localKey, status: tasks.status })
+    .select({
+      id: tasks.id,
+      jiraKey: tasks.jiraKey,
+      localKey: tasks.localKey,
+      status: tasks.status,
+    })
     .from(tasks)
     .where(
       or(
         and(isNotNull(tasks.deletedAt), lt(tasks.deletedAt, cutoff)),
-        and(eq(tasks.source, 'jira'), isNotNull(tasks.closedInJiraAt), lt(tasks.closedInJiraAt, cutoff), ne(tasks.status, 'running')),
+        and(
+          eq(tasks.source, 'jira'),
+          isNotNull(tasks.closedInJiraAt),
+          lt(tasks.closedInJiraAt, cutoff),
+          ne(tasks.status, 'running'),
+        ),
       ),
     )
     .all()
-    .map((r) => ({ id: r.id, key: (r.jiraKey ?? r.localKey) as string, jiraKey: r.jiraKey, status: r.status }));
+    .map((r) => ({
+      id: r.id,
+      key: (r.jiraKey ?? r.localKey) as string,
+      jiraKey: r.jiraKey,
+      status: r.status,
+    }));
 }
 
 export function insertTombstone(tx: Db | Tx, jiraKey: string, at: string): void {

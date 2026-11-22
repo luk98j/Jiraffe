@@ -5,8 +5,11 @@ import { BrowserRouter } from 'react-router';
 import { App } from './App.tsx';
 import './styles.css';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+});
 
+// biome-ignore lint/style/noNonNullAssertion: The application HTML always supplies the root element.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

@@ -25,7 +25,9 @@ export function runRetention(ctx: Ctx, now: Date = ctx.clock()): number {
   }
   const journalDays = getSetting(ctx, 'journal_retention_days');
   if (journalDays !== null) {
-    write(ctx, (tx) => deleteJournalBefore(tx, new Date(now.getTime() - journalDays * DAY_MS).toISOString()));
+    write(ctx, (tx) =>
+      deleteJournalBefore(tx, new Date(now.getTime() - journalDays * DAY_MS).toISOString()),
+    );
   }
   return candidates.length;
 }

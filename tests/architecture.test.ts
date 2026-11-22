@@ -41,7 +41,11 @@ function specifiers(source: string): string[] {
   return [...source.matchAll(re)].map((m) => m[1] as string);
 }
 
-interface Import { pkg: string; file: string; spec: string }
+interface Import {
+  pkg: string;
+  file: string;
+  spec: string;
+}
 function allImports(): Import[] {
   const result: Import[] = [];
   for (const pkg of PACKAGES) {
@@ -111,7 +115,7 @@ describe('dependency rules (AC-3)', () => {
     const violations = allImports().filter((i) => {
       if (!i.spec.startsWith('.')) return false;
       const target = resolve(dirname(join(ROOT, i.file)), i.spec);
-      return !target.startsWith(join(ROOT, 'packages', i.pkg) + '/');
+      return !target.startsWith(`${join(ROOT, 'packages', i.pkg)}/`);
     });
     expect(violations).toEqual([]);
   });
@@ -128,13 +132,20 @@ describe('only the engine writes task status (AC-22)', () => {
   const WRITER = 'packages/db/src/taskStatus.ts';
 
   it('imports @jiraffe/db/status-writer only from transition.ts and createTask.ts', () => {
-    const users = srcFiles.filter((f) => f.rel !== WRITER && f.text.includes('@jiraffe/db/status-writer')).map((f) => f.rel);
-    expect(users.sort()).toEqual(['packages/engine/src/createTask.ts', 'packages/engine/src/transition.ts']);
+    const users = srcFiles
+      .filter((f) => f.rel !== WRITER && f.text.includes('@jiraffe/db/status-writer'))
+      .map((f) => f.rel);
+    expect(users.sort()).toEqual([
+      'packages/engine/src/createTask.ts',
+      'packages/engine/src/transition.ts',
+    ]);
   });
 
   it('has no UPDATE tasks or insert(tasks) outside the status writer', () => {
     const bad = srcFiles.filter(
-      (f) => f.rel !== WRITER && (/UPDATE\s+tasks/i.test(f.text) || /insert\(\s*tasks\s*\)/.test(f.text)),
+      (f) =>
+        f.rel !== WRITER &&
+        (/UPDATE\s+tasks/i.test(f.text) || /insert\(\s*tasks\s*\)/.test(f.text)),
     );
     expect(bad.map((f) => f.rel)).toEqual([]);
   });
@@ -157,8 +168,27 @@ describe('only the engine writes task status (AC-22)', () => {
 
 describe('English only (AC-76)', () => {
   // Polish diacritics written as escapes so this file stays free of them.
-  const POLISH = new RegExp('[' + [0x105, 0x107, 0x119, 0x142, 0x144, 0xf3, 0x15b, 0x17a, 0x17c, 0x104, 0x106, 0x118, 0x141, 0x143, 0xd3, 0x15a, 0x179, 0x17b].map((c) => String.fromCharCode(c)).join('') + ']');
-  const SKIP = new Set(['node_modules', 'dist', '.git', 'data', 'runs', 'memory', '.DS_Store', 'pnpm-lock.yaml', 'coverage']);
+  const POLISH = new RegExp(
+    '[' +
+      [
+        0x105, 0x107, 0x119, 0x142, 0x144, 0xf3, 0x15b, 0x17a, 0x17c, 0x104, 0x106, 0x118, 0x141,
+        0x143, 0xd3, 0x15a, 0x179, 0x17b,
+      ]
+        .map((c) => String.fromCharCode(c))
+        .join('') +
+      ']',
+  );
+  const SKIP = new Set([
+    'node_modules',
+    'dist',
+    '.git',
+    'data',
+    'runs',
+    'memory',
+    '.DS_Store',
+    'pnpm-lock.yaml',
+    'coverage',
+  ]);
 
   function files(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {

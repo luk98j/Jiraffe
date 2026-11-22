@@ -30,7 +30,9 @@ export function App() {
         </nav>
       </header>
       {sync.data?.state === 'not_configured' && (
-        <div className="banner">Jira not configured. Set jira_base_url in Settings to import tasks.</div>
+        <div className="banner">
+          Jira not configured. Set jira_base_url in Settings to import tasks.
+        </div>
       )}
       <main>
         <Routes>

@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createEngine } from '@jiraffe/engine';
 import { buildServer, getPort, listen, HOST } from '../src/index.ts';
 
-const newApp = () => buildServer(createEngine({ dbPath: ':memory:', version: '1.2.3', logger: { error() {} } }));
+const newApp = () =>
+  buildServer(createEngine({ dbPath: ':memory:', version: '1.2.3', logger: { error() {} } }));
 
 let app: ReturnType<typeof buildServer> | undefined;
 afterEach(async () => {
@@ -35,7 +36,11 @@ describe('server listening (AC-4)', () => {
 
   it('serves the health route', async () => {
     app = newApp();
-    const res = await app.inject({ method: 'GET', url: '/api/health', headers: { host: '127.0.0.1:4317' } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { host: '127.0.0.1:4317' },
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true, version: '1.2.3' });
   });

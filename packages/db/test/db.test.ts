@@ -24,19 +24,58 @@ const cols = (table: string) =>
 describe('migrations (AC-6, AC-7)', () => {
   it('creates the seven tables with the section 3 columns', () => {
     expect(cols('tasks')).toEqual([
-      'id', 'source', 'jira_key', 'local_key', 'title', 'body', 'repo_path', 'status',
-      'status_before_pause', 'priority', 'max_credits', 'pause_reason', 'resume_at', 'jira_closed',
-      'body_changed_after_analysis', 'last_synced_at', 'closed_in_jira_at', 'deleted_at',
-      'created_at', 'updated_at',
+      'id',
+      'source',
+      'jira_key',
+      'local_key',
+      'title',
+      'body',
+      'repo_path',
+      'status',
+      'status_before_pause',
+      'priority',
+      'max_credits',
+      'pause_reason',
+      'resume_at',
+      'jira_closed',
+      'body_changed_after_analysis',
+      'last_synced_at',
+      'closed_in_jira_at',
+      'deleted_at',
+      'created_at',
+      'updated_at',
     ]);
     expect(cols('messages')).toEqual([
-      'id', 'task_id', 'role', 'source', 'content', 'jira_comment_id', 'created_at',
+      'id',
+      'task_id',
+      'role',
+      'source',
+      'content',
+      'jira_comment_id',
+      'created_at',
     ]);
     expect(cols('runs')).toEqual([
-      'id', 'task_id', 'kind', 'agent', 'session_id', 'status', 'pid', 'max_credits',
-      'credits_used', 'end_reason', 'started_at', 'finished_at',
+      'id',
+      'task_id',
+      'kind',
+      'agent',
+      'session_id',
+      'status',
+      'pid',
+      'max_credits',
+      'credits_used',
+      'end_reason',
+      'started_at',
+      'finished_at',
     ]);
-    expect(cols('events')).toEqual(['id', 'task_id', 'type', 'payload_json', 'processed_at', 'created_at']);
+    expect(cols('events')).toEqual([
+      'id',
+      'task_id',
+      'type',
+      'payload_json',
+      'processed_at',
+      'created_at',
+    ]);
     expect(cols('journal')).toEqual(['id', 'at', 'task_key', 'status', 'action', 'detail']);
     expect(cols('ignored_jira_keys')).toEqual(['jira_key', 'deleted_at']);
     expect(cols('settings')).toEqual(['key', 'value_json']);
@@ -57,9 +96,12 @@ describe('migrations (AC-6, AC-7)', () => {
 describe('settings seed (AC-8, AC-9)', () => {
   const rows = () =>
     Object.fromEntries(
-      (raw(db).prepare('SELECT key, value_json FROM settings').all() as { key: string; value_json: string }[]).map(
-        (r) => [r.key, JSON.parse(r.value_json)],
-      ),
+      (
+        raw(db).prepare('SELECT key, value_json FROM settings').all() as {
+          key: string;
+          value_json: string;
+        }[]
+      ).map((r) => [r.key, JSON.parse(r.value_json)]),
     );
 
   it('seeds every key with its default', () => {
@@ -71,7 +113,9 @@ describe('settings seed (AC-8, AC-9)', () => {
 
   it('never overwrites a changed value and re-seeds a missing key', () => {
     seedSettings(db);
-    raw(db).prepare("UPDATE settings SET value_json = '3' WHERE key = 'max_parallel_analysis'").run();
+    raw(db)
+      .prepare("UPDATE settings SET value_json = '3' WHERE key = 'max_parallel_analysis'")
+      .run();
     raw(db).prepare("DELETE FROM settings WHERE key = 'retention_days'").run();
     seedSettings(db);
     expect(rows().max_parallel_analysis).toBe(3);

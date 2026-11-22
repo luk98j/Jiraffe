@@ -53,7 +53,9 @@ describe('numbering (AC-47, AC-48)', () => {
     engine.createLocalTask(input);
     const t2 = engine.createLocalTask(input);
     const t3 = engine.createLocalTask(input);
-    raw.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run('2026-01-01T00:00:00.000Z', t2.id);
+    raw
+      .prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?')
+      .run('2026-01-01T00:00:00.000Z', t2.id);
     raw.prepare('DELETE FROM tasks WHERE id = ?').run(t3.id);
     expect(engine.createLocalTask(input).key).toBe('LOC-0004');
   });
@@ -72,7 +74,11 @@ describe('numbering (AC-47, AC-48)', () => {
     try {
       const a = makeEngine({}, dir);
       const b = makeEngine({}, dir);
-      const keys = [a.engine.createLocalTask(input).key, b.engine.createLocalTask(input).key, a.engine.createLocalTask(input).key];
+      const keys = [
+        a.engine.createLocalTask(input).key,
+        b.engine.createLocalTask(input).key,
+        a.engine.createLocalTask(input).key,
+      ];
       expect(keys).toEqual(['LOC-0001', 'LOC-0002', 'LOC-0003']);
     } finally {
       disposeAll();
@@ -96,7 +102,9 @@ describe('numbering (AC-47, AC-48)', () => {
 
   it('leaves the counter, tasks and journal unchanged when creation rolls back', () => {
     const { engine, raw } = makeEngine();
-    raw.exec("CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    raw.exec(
+      "CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END",
+    );
     expect(() => engine.createLocalTask(input)).toThrow(/injected/);
     raw.exec('DROP TRIGGER fail_journal');
     expect(engine.getSetting('local_task_counter')).toBe(0);

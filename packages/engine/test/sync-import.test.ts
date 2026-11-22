@@ -18,16 +18,27 @@ describe('importing new issues (AC-24, AC-81)', () => {
     const { jira, h } = setup();
     jira.setIssues([issue(1), issue(2), issue(3)]);
     expect(await h.engine.runTaskSync()).toMatchObject({ outcome: 'ok' });
-    const rows = h.raw.prepare('SELECT * FROM tasks ORDER BY id').all() as Record<string, unknown>[];
+    const rows = h.raw.prepare('SELECT * FROM tasks ORDER BY id').all() as Record<
+      string,
+      unknown
+    >[];
     expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({
-      source: 'jira', status: 'new', jira_key: 'PROJ-1', local_key: null,
-      title: 'Title PROJ-1', body: 'Body PROJ-1', last_synced_at: NOW, repo_path: null,
+      source: 'jira',
+      status: 'new',
+      jira_key: 'PROJ-1',
+      local_key: null,
+      title: 'Title PROJ-1',
+      body: 'Body PROJ-1',
+      last_synced_at: NOW,
+      repo_path: null,
     });
     const imported = h.engine.listJournal({ action: 'task_imported' });
     expect(imported).toHaveLength(3);
     expect(imported.every((j) => j.status === 'new' && j.detail === 'from Jira')).toBe(true);
-    expect(syncRuns(h)).toEqual([expect.objectContaining({ taskKey: null, status: null, detail: '3 new, 0 updated' })]);
+    expect(syncRuns(h)).toEqual([
+      expect.objectContaining({ taskKey: null, status: null, detail: '3 new, 0 updated' }),
+    ]);
   });
 
   it('imports 120 issues over 3 pages', async () => {
@@ -49,9 +60,16 @@ describe('importing new issues (AC-24, AC-81)', () => {
   it('handles null and empty descriptions and very long text', async () => {
     const { jira, h } = setup();
     const long = 'x'.repeat(200_000);
-    jira.setIssues([issue(1, { description: null }), issue(2, { description: '' }), issue(3, { title: long, description: long })]);
+    jira.setIssues([
+      issue(1, { description: null }),
+      issue(2, { description: '' }),
+      issue(3, { title: long, description: long }),
+    ]);
     await h.engine.runTaskSync();
-    const rows = h.raw.prepare('SELECT body, title FROM tasks ORDER BY id').all() as { body: string; title: string }[];
+    const rows = h.raw.prepare('SELECT body, title FROM tasks ORDER BY id').all() as {
+      body: string;
+      title: string;
+    }[];
     expect([rows[0]!.body, rows[1]!.body]).toEqual(['', '']);
     expect(rows[2]!.title).toHaveLength(200_000);
   });
@@ -74,7 +92,11 @@ describe('filtering (AC-25, AC-26, AC-31)', () => {
       issue(3),
     ]);
     await h.engine.runTaskSync();
-    expect((h.raw.prepare('SELECT jira_key FROM tasks').all() as { jira_key: string }[]).map((r) => r.jira_key)).toEqual(['PROJ-3']);
+    expect(
+      (h.raw.prepare('SELECT jira_key FROM tasks').all() as { jira_key: string }[]).map(
+        (r) => r.jira_key,
+      ),
+    ).toEqual(['PROJ-3']);
   });
 
   it('sends the JQL built from the current settings', async () => {
@@ -84,7 +106,10 @@ describe('filtering (AC-25, AC-26, AC-31)', () => {
     await h.engine.runTaskSync();
     expect(jira.calls[0]).toEqual({
       method: 'searchPage',
-      args: ['assignee = currentUser() AND statusCategory != Done AND status NOT IN ("Blocked") AND project IN (PROJ)', undefined],
+      args: [
+        'assignee = currentUser() AND statusCategory != Done AND status NOT IN ("Blocked") AND project IN (PROJ)',
+        undefined,
+      ],
     });
   });
 
@@ -95,7 +120,9 @@ describe('filtering (AC-25, AC-26, AC-31)', () => {
     h.engine.updateSetting('jira_ignored_statuses', ['To Do']);
     await h.engine.runTaskSync();
     expect(taskCount(h)).toBe(2);
-    expect(h.raw.prepare('SELECT count(*) c FROM tasks WHERE deleted_at IS NULL').get()).toEqual({ c: 2 });
+    expect(h.raw.prepare('SELECT count(*) c FROM tasks WHERE deleted_at IS NULL').get()).toEqual({
+      c: 2,
+    });
   });
 });
 
@@ -124,10 +151,16 @@ describe('repeat syncs (AC-27, AC-28, AC-29, owner decision on silent syncs)', (
 
   it('does not import a tombstoned key', async () => {
     const { jira, h } = setup();
-    h.raw.prepare("INSERT INTO ignored_jira_keys (jira_key, deleted_at) VALUES ('PROJ-1', 'x')").run();
+    h.raw
+      .prepare("INSERT INTO ignored_jira_keys (jira_key, deleted_at) VALUES ('PROJ-1', 'x')")
+      .run();
     jira.setIssues([issue(1), issue(2)]);
     await h.engine.runTaskSync();
-    expect((h.raw.prepare('SELECT jira_key FROM tasks').all() as { jira_key: string }[]).map((r) => r.jira_key)).toEqual(['PROJ-2']);
+    expect(
+      (h.raw.prepare('SELECT jira_key FROM tasks').all() as { jira_key: string }[]).map(
+        (r) => r.jira_key,
+      ),
+    ).toEqual(['PROJ-2']);
   });
 });
 
@@ -161,7 +194,10 @@ describe('not configured (AC-43)', () => {
     h.engine.updateSetting('jira_base_url', BASE_URL);
     const res = await h.engine.runTaskSync();
     expect(res.outcome).toBe('error');
-    expect(h.engine.syncState()).toMatchObject({ state: 'error', lastError: expect.stringContaining('JIRA_API_TOKEN') });
+    expect(h.engine.syncState()).toMatchObject({
+      state: 'error',
+      lastError: expect.stringContaining('JIRA_API_TOKEN'),
+    });
   });
 });
 
@@ -171,7 +207,11 @@ describe('state', () => {
     jira.setIssues([issue(1)]);
     await h.engine.runTaskSync();
     expect(h.engine.syncState()).toEqual({
-      state: 'idle', lastRunAt: NOW, lastError: null, lastSkippedAt: null, lastResult: '1 new, 0 updated',
+      state: 'idle',
+      lastRunAt: NOW,
+      lastError: null,
+      lastSkippedAt: null,
+      lastResult: '1 new, 0 updated',
     });
   });
 });

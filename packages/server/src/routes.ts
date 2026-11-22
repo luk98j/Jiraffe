@@ -3,9 +3,17 @@ import { ValidationError, type TransitionEvent } from '@jiraffe/core';
 import type { Engine } from '@jiraffe/engine';
 
 // Events the UI may send. Everything else is driven by workers and sync.
-const UI_EVENTS: readonly string[] = ['enqueue', 'cancel', 'reanalyse', 'retry', 'resume', 'review_accepted'];
+const UI_EVENTS: readonly string[] = [
+  'enqueue',
+  'cancel',
+  'reanalyse',
+  'retry',
+  'resume',
+  'review_accepted',
+];
 
-const obj = (b: unknown): Record<string, unknown> => (b && typeof b === 'object' ? (b as Record<string, unknown>) : {});
+const obj = (b: unknown): Record<string, unknown> =>
+  b && typeof b === 'object' ? (b as Record<string, unknown>) : {};
 
 function idOf(params: unknown): number {
   const id = Number((params as { id: string }).id);
@@ -16,7 +24,8 @@ function idOf(params: unknown): number {
 function text(b: Record<string, unknown>, field: string, label: string, required = true): string {
   const v = b[field];
   if (v === undefined && !required) return '';
-  if (typeof v !== 'string' || (required && !v.trim())) throw new ValidationError(`${label} is required`, field);
+  if (typeof v !== 'string' || (required && !v.trim()))
+    throw new ValidationError(`${label} is required`, field);
   return v;
 }
 
@@ -77,7 +86,8 @@ export function registerRoutes(app: FastifyInstance, engine: Engine): void {
     let limit: number | undefined;
     if (q.limit !== undefined) {
       limit = Number(q.limit);
-      if (!Number.isInteger(limit) || limit < 1) throw new ValidationError('Invalid limit', 'limit');
+      if (!Number.isInteger(limit) || limit < 1)
+        throw new ValidationError('Invalid limit', 'limit');
     }
     return {
       entries: engine.listJournal({

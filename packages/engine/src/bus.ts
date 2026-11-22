@@ -24,7 +24,8 @@ export class Bus {
     const handler = (payload: T) => {
       try {
         const r = fn(payload);
-        if (r instanceof Promise) r.catch((err) => this.logger.error(`bus handler failed (${topic})`, err));
+        if (r instanceof Promise)
+          r.catch((err) => this.logger.error(`bus handler failed (${topic})`, err));
       } catch (err) {
         this.logger.error(`bus handler failed (${topic})`, err);
       }

@@ -30,7 +30,13 @@ export function listJiraTasks(db: Db | Tx): JiraTaskRow[] {
 }
 
 export function listIgnoredJiraKeys(db: Db | Tx): Set<string> {
-  return new Set(db.select({ k: ignoredJiraKeys.jiraKey }).from(ignoredJiraKeys).all().map((r) => r.k));
+  return new Set(
+    db
+      .select({ k: ignoredJiraKeys.jiraKey })
+      .from(ignoredJiraKeys)
+      .all()
+      .map((r) => r.k),
+  );
 }
 
 // shortcut: "finished analysis" is any analysis run with finished_at set (runs.status is not defined by the spec); revisit when workers exist.
@@ -61,7 +67,10 @@ export function updateTaskFields(
 }
 
 export function markClosedInJira(tx: Db | Tx, id: number, now: string): void {
-  tx.update(tasks).set({ jiraClosed: true, closedInJiraAt: now, updatedAt: now }).where(eq(tasks.id, id)).run();
+  tx.update(tasks)
+    .set({ jiraClosed: true, closedInJiraAt: now, updatedAt: now })
+    .where(eq(tasks.id, id))
+    .run();
 }
 
 const COMMENT_STATUSES = ['waiting_user', 'ready_to_delegate', 'running', 'paused_quota'] as const;
@@ -71,7 +80,13 @@ export function listCommentSyncTasks(db: Db | Tx): { id: number; jiraKey: string
   return db
     .select({ id: tasks.id, jiraKey: tasks.jiraKey })
     .from(tasks)
-    .where(and(eq(tasks.source, 'jira'), isNull(tasks.deletedAt), inArray(tasks.status, COMMENT_STATUSES)))
+    .where(
+      and(
+        eq(tasks.source, 'jira'),
+        isNull(tasks.deletedAt),
+        inArray(tasks.status, COMMENT_STATUSES),
+      ),
+    )
     .all() as { id: number; jiraKey: string }[];
 }
 

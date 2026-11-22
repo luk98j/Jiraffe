@@ -39,9 +39,21 @@ export function createScheduler(ctx: Ctx) {
   return {
     start() {
       running = true;
-      every(() => getSetting(ctx, 'jira_tasks_sync_minutes') * MINUTE_MS, () => runTaskSync(ctx), 'task sync');
-      every(() => getSetting(ctx, 'jira_comments_sync_minutes') * MINUTE_MS, () => runCommentSync(ctx), 'comment sync');
-      every(() => DAY_MS, () => runRetention(ctx), 'retention');
+      every(
+        () => getSetting(ctx, 'jira_tasks_sync_minutes') * MINUTE_MS,
+        () => runTaskSync(ctx),
+        'task sync',
+      );
+      every(
+        () => getSetting(ctx, 'jira_comments_sync_minutes') * MINUTE_MS,
+        () => runCommentSync(ctx),
+        'comment sync',
+      );
+      every(
+        () => DAY_MS,
+        () => runRetention(ctx),
+        'retention',
+      );
     },
     stop() {
       running = false;

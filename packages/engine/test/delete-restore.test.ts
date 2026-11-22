@@ -51,7 +51,11 @@ describe('restore (AC-53)', () => {
     const id = newTaskIn(h.engine, 'paused_quota', 'running');
     h.engine.deleteTask(id);
     h.engine.restoreTask(id);
-    expect(h.engine.getTask(id)).toMatchObject({ deletedAt: null, status: 'paused_quota', statusBeforePause: 'running' });
+    expect(h.engine.getTask(id)).toMatchObject({
+      deletedAt: null,
+      status: 'paused_quota',
+      statusBeforePause: 'running',
+    });
     expect(h.engine.listJournal({ action: 'task_restored' })).toEqual([
       expect.objectContaining({ taskKey: 'LOC-0001', status: 'paused_quota' }),
     ]);

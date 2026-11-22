@@ -1,4 +1,12 @@
-import { createHttpJiraClient, buildJql, fetchAllIssues, JiraError, type JiraClient, type JiraComment, type JiraIssue } from '@jiraffe/jira';
+import {
+  createHttpJiraClient,
+  buildJql,
+  fetchAllIssues,
+  JiraError,
+  type JiraClient,
+  type JiraComment,
+  type JiraIssue,
+} from '@jiraffe/jira';
 import {
   getTaskDto,
   hasFinishedAnalysis,
@@ -27,14 +35,16 @@ function resolveClient(ctx: Ctx): JiraClient {
   if (ctx.jiraClient) return ctx.jiraClient;
   const email = process.env.JIRA_EMAIL;
   const token = process.env.JIRA_API_TOKEN;
-  if (!email || !token) throw new Error('Jira credentials are not set (JIRA_EMAIL and JIRA_API_TOKEN)');
+  if (!email || !token)
+    throw new Error('Jira credentials are not set (JIRA_EMAIL and JIRA_API_TOKEN)');
   return createHttpJiraClient({ baseUrl: getSetting(ctx, 'jira_base_url'), email, token });
 }
 
 /** Messages shown to the user never come from raw errors, so they cannot carry secrets. */
 function safeMessage(err: unknown): string {
   if (err instanceof JiraError) return err.message;
-  if (err instanceof Error && err.message.startsWith('Jira credentials are not set')) return err.message;
+  if (err instanceof Error && err.message.startsWith('Jira credentials are not set'))
+    return err.message;
   return 'Sync failed unexpectedly';
 }
 
@@ -56,7 +66,13 @@ export async function exclusiveSync(ctx: Ctx, job: () => Promise<string>): Promi
   s.state = { ...s.state, state: 'running' };
   try {
     const result = await job();
-    s.state = { ...s.state, state: 'idle', lastRunAt: ctx.clock().toISOString(), lastError: null, lastResult: result };
+    s.state = {
+      ...s.state,
+      state: 'idle',
+      lastRunAt: ctx.clock().toISOString(),
+      lastError: null,
+      lastResult: result,
+    };
     ctx.bus.emitChanged();
     return { outcome: 'ok', result };
   } catch (err) {
@@ -70,7 +86,8 @@ export async function exclusiveSync(ctx: Ctx, job: () => Promise<string>): Promi
   }
 }
 
-const isClosed = (i: JiraIssue, ignored: string[]) => i.statusCategory === 'done' || ignored.includes(i.statusName);
+const isClosed = (i: JiraIssue, ignored: string[]) =>
+  i.statusCategory === 'done' || ignored.includes(i.statusName);
 
 export function runTaskSync(ctx: Ctx): Promise<SyncOutcome> {
   return exclusiveSync(ctx, async () => {
@@ -113,6 +130,7 @@ export function runTaskSync(ctx: Ctx): Promise<SyncOutcome> {
           continue;
         }
         if (task.deletedAt) continue;
+        // biome-ignore lint/style/noNonNullAssertion: The task was read in this same transaction.
         const current = getTaskDto(tx, task.id)!;
         const body = issue.description ?? '';
         const fields: string[] = [];
@@ -125,12 +143,23 @@ export function runTaskSync(ctx: Ctx): Promise<SyncOutcome> {
             flagBodyChanged: fields.includes('body') && hasFinishedAnalysis(tx, task.id),
             now,
           });
-          insertJournal(tx, { at: now, taskKey: current.key, status: current.status, action: 'task_updated_from_jira', detail: fields.join(', ') });
+          insertJournal(tx, {
+            at: now,
+            taskKey: current.key,
+            status: current.status,
+            action: 'task_updated_from_jira',
+            detail: fields.join(', '),
+          });
           updated++;
         }
         if (isDone && !task.jiraClosed) {
           markClosedInJira(tx, task.id, now);
-          insertJournal(tx, { at: now, taskKey: current.key, status: current.status, action: 'closed_in_jira' });
+          insertJournal(tx, {
+            at: now,
+            taskKey: current.key,
+            status: current.status,
+            action: 'closed_in_jira',
+          });
           closed++;
         }
       }
@@ -166,7 +195,14 @@ export function runCommentSync(ctx: Ctx): Promise<SyncOutcome> {
         const fresh = comments.filter((c) => !known.has(c.id));
         if (fresh.length === 0) continue;
         for (const c of fresh) {
-          insertMessage(tx, { taskId, role: 'user', source: 'jira', content: c.body, jiraCommentId: c.id, createdAt: c.createdAt });
+          insertMessage(tx, {
+            taskId,
+            role: 'user',
+            source: 'jira',
+            content: c.body,
+            jiraCommentId: c.id,
+            createdAt: c.createdAt,
+          });
         }
         let status = task.status;
         if (status === 'waiting_user') {
@@ -174,7 +210,13 @@ export function runCommentSync(ctx: Ctx): Promise<SyncOutcome> {
           if (r.changed) status = r.to;
         }
         for (let i = 0; i < fresh.length; i++) {
-          insertJournal(tx, { at: now, taskKey: task.key, status, action: 'comment_added', detail: 'source: jira' });
+          insertJournal(tx, {
+            at: now,
+            taskKey: task.key,
+            status,
+            action: 'comment_added',
+            detail: 'source: jira',
+          });
         }
         added += fresh.length;
       }

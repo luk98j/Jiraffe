@@ -3,7 +3,8 @@ import { FakeJiraClient } from '@jiraffe/jira/testing';
 import { BASE_URL, disposeAll, issue, makeEngine, newTaskIn, rawTask } from './helpers.ts';
 
 const MIN = 60_000;
-const calls = (jira: FakeJiraClient, method: string) => jira.calls.filter((c) => c.method === method).length;
+const calls = (jira: FakeJiraClient, method: string) =>
+  jira.calls.filter((c) => c.method === method).length;
 
 beforeEach(() => {
   vi.useFakeTimers({ now: new Date('2026-11-21T10:00:00.000Z') });
@@ -36,7 +37,9 @@ describe('start sequence (AC-42)', () => {
     expect(h.raw.prepare('SELECT 1 FROM tasks WHERE id = ?').get(old)).toBeUndefined();
     expect(h.engine.getTask(a).status).toBe('new');
     expect(h.engine.getTask(b).status).toBe('queued_analysis');
-    expect(h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'analysis_started'").get()).toEqual({ c: 0 });
+    expect(
+      h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'analysis_started'").get(),
+    ).toEqual({ c: 0 });
     h.engine.stop();
   });
 
@@ -66,18 +69,23 @@ describe('timer delay limits', () => {
     expect(clampDelay(30 * MIN)).toBe(30 * MIN);
   });
 
-  it.each(['99999999999', '0', '-5', '"x"'])('a stored out-of-range interval (%s) falls back to the default, not a tight loop', async (stored) => {
-    const { jira, h } = setup();
-    await h.engine.start();
-    h.raw.prepare("UPDATE settings SET value_json = ? WHERE key = 'jira_tasks_sync_minutes'").run(stored);
-    await vi.advanceTimersByTimeAsync(30 * MIN); // armed with the old value; re-arms after reading the bad one
-    expect(calls(jira, 'searchPage')).toBe(2);
-    await vi.advanceTimersByTimeAsync(29 * MIN);
-    expect(calls(jira, 'searchPage')).toBe(2);
-    await vi.advanceTimersByTimeAsync(MIN);
-    expect(calls(jira, 'searchPage')).toBe(3);
-    h.engine.stop();
-  });
+  it.each(['99999999999', '0', '-5', '"x"'])(
+    'a stored out-of-range interval (%s) falls back to the default, not a tight loop',
+    async (stored) => {
+      const { jira, h } = setup();
+      await h.engine.start();
+      h.raw
+        .prepare("UPDATE settings SET value_json = ? WHERE key = 'jira_tasks_sync_minutes'")
+        .run(stored);
+      await vi.advanceTimersByTimeAsync(30 * MIN); // armed with the old value; re-arms after reading the bad one
+      expect(calls(jira, 'searchPage')).toBe(2);
+      await vi.advanceTimersByTimeAsync(29 * MIN);
+      expect(calls(jira, 'searchPage')).toBe(2);
+      await vi.advanceTimersByTimeAsync(MIN);
+      expect(calls(jira, 'searchPage')).toBe(3);
+      h.engine.stop();
+    },
+  );
 });
 
 describe('timers (AC-45, AC-59)', () => {

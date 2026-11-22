@@ -11,7 +11,11 @@ const VIEW: Record<Status, { label: string; color: string; actions: string[] }> 
   queued_analysis: { label: 'New / Queued', color: 'grey', actions: ['Analyse', 'Delete'] },
   analysing: { label: 'Analysing', color: 'blue', actions: ['Cancel'] },
   waiting_user: { label: 'Waiting for you', color: 'orange', actions: ['Answer', 'Delete'] },
-  ready_to_delegate: { label: 'Ready to delegate', color: 'green', actions: ['Delegate', 'Re-analyse', 'Delete'] },
+  ready_to_delegate: {
+    label: 'Ready to delegate',
+    color: 'green',
+    actions: ['Delegate', 'Re-analyse', 'Delete'],
+  },
   delegated: { label: 'Queued for execution', color: 'blue', actions: ['Cancel'] },
   running: { label: 'Running', color: 'blue', actions: ['Cancel', 'Logs'] },
   paused_quota: { label: 'Paused (usage limit)', color: 'yellow', actions: ['Cancel', 'Resume'] },
@@ -23,7 +27,10 @@ const VIEW: Record<Status, { label: string; color: string; actions: string[] }> 
 
 const card = async (key: string) => screen.findByTestId(`card-${key}`);
 const board = (tasks: ReturnType<typeof task>[], extra?: Parameters<typeof withTasks>[1]) =>
-  renderApp('/', withTasks(() => tasks, extra));
+  renderApp(
+    '/',
+    withTasks(() => tasks, extra),
+  );
 
 describe('card state display (AC-60)', () => {
   it.each(STATUSES)('%s shows label, icon and color class', async (status) => {
@@ -37,7 +44,13 @@ describe('card state display (AC-60)', () => {
 
   it('uses a distinct icon for every status', async () => {
     board(STATUSES.map((status, i) => task({ id: i + 1, status })));
-    const icons = await Promise.all(STATUSES.map(async (_s, i) => within(await card(`LOC-${String(i + 1).padStart(4, '0')}`)).getByTestId('status-icon').textContent));
+    const icons = await Promise.all(
+      STATUSES.map(
+        async (_s, i) =>
+          within(await card(`LOC-${String(i + 1).padStart(4, '0')}`)).getByTestId('status-icon')
+            .textContent,
+      ),
+    );
     expect(new Set(icons).size).toBe(STATUSES.length);
   });
 });
@@ -45,15 +58,28 @@ describe('card state display (AC-60)', () => {
 describe('columns (AC-61)', () => {
   it('follows flow order, merges new and queued, and counts', async () => {
     board([
-      task({ id: 1, status: 'new' }), task({ id: 2, status: 'queued_analysis' }),
-      task({ id: 3, status: 'waiting_user' }), task({ id: 4, status: 'waiting_user' }),
-      task({ id: 5, status: 'review' }), task({ id: 6, status: 'failed' }), task({ id: 7, status: 'done' }),
+      task({ id: 1, status: 'new' }),
+      task({ id: 2, status: 'queued_analysis' }),
+      task({ id: 3, status: 'waiting_user' }),
+      task({ id: 4, status: 'waiting_user' }),
+      task({ id: 5, status: 'review' }),
+      task({ id: 6, status: 'failed' }),
+      task({ id: 7, status: 'done' }),
     ]);
     await card('LOC-0001');
     const titles = screen.getAllByTestId('column-title').map((e) => e.textContent);
     expect(titles).toEqual([
-      'New / Queued', 'Analysing', 'Waiting for you', 'Ready to delegate', 'Queued for execution',
-      'Running', 'Paused (usage limit)', 'Needs review', 'Failed', 'Done', 'Cancelled',
+      'New / Queued',
+      'Analysing',
+      'Waiting for you',
+      'Ready to delegate',
+      'Queued for execution',
+      'Running',
+      'Paused (usage limit)',
+      'Needs review',
+      'Failed',
+      'Done',
+      'Cancelled',
     ]);
     const col = (id: string) => screen.getByTestId(`column-${id}`);
     expect(within(col('new_queued')).getByTestId('column-count')).toHaveTextContent('2');
@@ -69,7 +95,9 @@ describe('columns (AC-61)', () => {
     board(STATUSES.map((status, i) => task({ id: i + 1, status })));
     for (const [i, status] of STATUSES.entries()) {
       const c = await card(`LOC-${String(i + 1).padStart(4, '0')}`);
-      expect(c.classList.contains('card-highlight'), status).toBe(['waiting_user', 'review', 'failed'].includes(status));
+      expect(c.classList.contains('card-highlight'), status).toBe(
+        ['waiting_user', 'review', 'failed'].includes(status),
+      );
     }
   });
 
@@ -82,7 +110,18 @@ describe('columns (AC-61)', () => {
 
 describe('card content and badges (AC-62)', () => {
   it('shows key, title, repository and source badge', async () => {
-    board([task({ id: 1, key: 'PROJ-7', source: 'jira', jiraKey: 'PROJ-7', localKey: null, title: 'Fix it', repoPath: '/repos/x' }), task({ id: 2, repoPath: null })]);
+    board([
+      task({
+        id: 1,
+        key: 'PROJ-7',
+        source: 'jira',
+        jiraKey: 'PROJ-7',
+        localKey: null,
+        title: 'Fix it',
+        repoPath: '/repos/x',
+      }),
+      task({ id: 2, repoPath: null }),
+    ]);
     const c = await card('PROJ-7');
     expect(within(c).getByText('PROJ-7')).toBeInTheDocument();
     expect(within(c).getByText('Fix it')).toBeInTheDocument();
@@ -106,7 +145,8 @@ describe('card content and badges (AC-62)', () => {
     expect((await badges(2)).getByText('Description changed in Jira')).toBeInTheDocument();
     expect((await badges(3)).getByText('Closed in Jira')).toBeInTheDocument();
     const none = await badges(4);
-    for (const t of ['New comment', 'Description changed in Jira', 'Closed in Jira']) expect(none.queryByText(t)).toBeNull();
+    for (const t of ['New comment', 'Description changed in Jira', 'Closed in Jira'])
+      expect(none.queryByText(t)).toBeNull();
   });
 });
 
@@ -132,11 +172,21 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
       req.method === 'POST' ? { body: { task: task({ id: 1 }) } } : undefined,
     );
     await user.click(within(await card('LOC-0001')).getByRole('button', { name: label }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/tasks/1/events' && c.body.event === event)).toBe(true));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) => c.method === 'POST' && c.path === '/api/tasks/1/events' && c.body.event === event,
+        ),
+      ).toBe(true),
+    );
   });
 
   it('disables Analyse without a repository and on queued tasks, with reasons', async () => {
-    board([task({ id: 1, repoPath: null }), task({ id: 2, status: 'queued_analysis' }), task({ id: 3 })]);
+    board([
+      task({ id: 1, repoPath: null }),
+      task({ id: 2, status: 'queued_analysis' }),
+      task({ id: 3 }),
+    ]);
     const a = within(await card('LOC-0001')).getByRole('button', { name: 'Analyse' });
     expect(a).toBeDisabled();
     expect(a).toHaveAttribute('title', 'Choose a repository first');
@@ -147,7 +197,11 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
   });
 
   it('shows Delegate only on ready tasks, always disabled, with the right reason', async () => {
-    board([task({ id: 1, status: 'ready_to_delegate' }), task({ id: 2, status: 'ready_to_delegate', bodyChangedAfterAnalysis: true }), task({ id: 3 })]);
+    board([
+      task({ id: 1, status: 'ready_to_delegate' }),
+      task({ id: 2, status: 'ready_to_delegate', bodyChangedAfterAnalysis: true }),
+      task({ id: 3 }),
+    ]);
     const d1 = within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' });
     expect(d1).toBeDisabled();
     expect(d1).toHaveAttribute('title', 'Execution is not available yet');
@@ -159,10 +213,15 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
 
   it('Answer, Show diff, Logs and Show error link to the task detail', async () => {
     board([
-      task({ id: 1, status: 'waiting_user' }), task({ id: 2, status: 'review' }),
-      task({ id: 3, status: 'running' }), task({ id: 4, status: 'failed' }),
+      task({ id: 1, status: 'waiting_user' }),
+      task({ id: 2, status: 'review' }),
+      task({ id: 3, status: 'running' }),
+      task({ id: 4, status: 'failed' }),
     ]);
-    const href = async (n: number, name: string) => within(await card(`LOC-000${n}`)).getByRole('link', { name }).getAttribute('href');
+    const href = async (n: number, name: string) =>
+      within(await card(`LOC-000${n}`))
+        .getByRole('link', { name })
+        .getAttribute('href');
     expect(await href(1, 'Answer')).toBe('/tasks/1?focus=chat');
     expect(await href(2, 'Show diff')).toBe('/tasks/2');
     expect(await href(3, 'Logs')).toBe('/tasks/3');
@@ -170,36 +229,55 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
   });
 
   it('asks for confirmation before deleting and never mentions worktrees', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { user, calls } = board([task({ id: 1 })], (req) => (req.method === 'DELETE' ? { status: 204 } : undefined));
+    const confirm = vi
+      .spyOn(window, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const { user, calls } = board([task({ id: 1 })], (req) =>
+      req.method === 'DELETE' ? { status: 204 } : undefined,
+    );
     const del = within(await card('LOC-0001')).getByRole('button', { name: 'Delete' });
     await user.click(del);
-    expect(confirm).toHaveBeenCalledWith('Delete this task from the local board? Nothing changes in Jira.');
+    expect(confirm).toHaveBeenCalledWith(
+      'Delete this task from the local board? Nothing changes in Jira.',
+    );
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     await user.click(del);
-    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/tasks/1')).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/tasks/1')).toBe(true),
+    );
   });
 
   it('keeps card buttons reachable and usable with the keyboard', async () => {
-    const { user, calls } = board([task({ id: 1 })], (req) => (req.method === 'POST' ? { body: {} } : undefined));
+    const { user, calls } = board([task({ id: 1 })], (req) =>
+      req.method === 'POST' ? { body: {} } : undefined,
+    );
     const analyse = within(await card('LOC-0001')).getByRole('button', { name: 'Analyse' });
     analyse.focus();
     expect(analyse).toHaveFocus();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.body.event === 'enqueue')).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.body.event === 'enqueue')).toBe(true),
+    );
   });
 });
 
 describe('add task and filter (AC-66)', () => {
   it('creates a local task that appears in New / Queued without a reload', async () => {
     const list: ReturnType<typeof task>[] = [];
-    const { user, calls } = renderApp('/', withTasks(() => list, (req) => {
-      if (req.method === 'POST' && req.path === '/api/tasks') {
-        const t = task({ id: 9, title: req.body.title, repoPath: req.body.repoPath });
-        list.push(t);
-        return { status: 201, body: { task: t } };
-      }
-    }));
+    const { user, calls } = renderApp(
+      '/',
+      withTasks(
+        () => list,
+        (req) => {
+          if (req.method === 'POST' && req.path === '/api/tasks') {
+            const t = task({ id: 9, title: req.body.title, repoPath: req.body.repoPath });
+            list.push(t);
+            return { status: 201, body: { task: t } };
+          }
+        },
+      ),
+    );
     await screen.findByText('No tasks yet');
     await user.type(screen.getByLabelText('Title'), 'Brand new');
     await user.type(screen.getByLabelText('Description'), 'Some text');
@@ -207,20 +285,41 @@ describe('add task and filter (AC-66)', () => {
     await user.click(screen.getByRole('button', { name: 'Add task' }));
     const c = await card('LOC-0009');
     expect(within(screen.getByTestId('column-new_queued')).getByTestId('card-LOC-0009')).toBe(c);
-    expect(calls.find((x) => x.method === 'POST')!.body).toEqual({ title: 'Brand new', description: 'Some text', repoPath: '/repos/z' });
+    expect(calls.find((x) => x.method === 'POST')!.body).toEqual({
+      title: 'Brand new',
+      description: 'Some text',
+      repoPath: '/repos/z',
+    });
     expect(screen.getByLabelText('Title')).toHaveValue('');
   });
 
   it('shows the server message when the form is rejected', async () => {
-    const { user } = renderApp('/', withTasks(() => [], (req) =>
-      req.method === 'POST' ? { status: 400, body: { error: { code: 'validation', message: 'Title is required', field: 'title' } } } : undefined));
+    const { user } = renderApp(
+      '/',
+      withTasks(
+        () => [],
+        (req) =>
+          req.method === 'POST'
+            ? {
+                status: 400,
+                body: {
+                  error: { code: 'validation', message: 'Title is required', field: 'title' },
+                },
+              }
+            : undefined,
+      ),
+    );
     await screen.findByText('No tasks yet');
     await user.click(screen.getByRole('button', { name: 'Add task' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Title is required');
   });
 
   it('hides and shows done and cancelled tasks', async () => {
-    const { user } = board([task({ id: 1, status: 'done' }), task({ id: 2, status: 'cancelled' }), task({ id: 3 })]);
+    const { user } = board([
+      task({ id: 1, status: 'done' }),
+      task({ id: 2, status: 'cancelled' }),
+      task({ id: 3 }),
+    ]);
     await card('LOC-0001');
     await user.click(screen.getByLabelText('Hide done and cancelled'));
     expect(screen.queryByTestId('card-LOC-0001')).toBeNull();
@@ -242,7 +341,9 @@ describe('robustness (AC-73)', () => {
     let fail = false;
     const { queryClient } = renderApp('/', (req) => {
       if (req.path !== '/api/tasks') return undefined;
-      return fail ? { status: 500, body: { error: { code: 'internal', message: 'Internal server error' } } } : { body: { tasks: [task({ id: 1 })] } };
+      return fail
+        ? { status: 500, body: { error: { code: 'internal', message: 'Internal server error' } } }
+        : { body: { tasks: [task({ id: 1 })] } };
     });
     await card('LOC-0001');
     fail = true;
@@ -252,11 +353,18 @@ describe('robustness (AC-73)', () => {
   });
 
   it('explains a network failure in plain English', async () => {
-    const { queryClient } = renderApp('/', withTasks(() => [task({ id: 1 })]));
+    const { queryClient } = renderApp(
+      '/',
+      withTasks(() => [task({ id: 1 })]),
+    );
     await card('LOC-0001');
-    globalThis.fetch = (async () => { throw new TypeError('Failed to fetch'); }) as typeof fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch;
     await queryClient.invalidateQueries();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the Jiraffe server. Showing the last loaded data.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cannot reach the Jiraffe server. Showing the last loaded data.',
+    );
     expect(screen.getByTestId('card-LOC-0001')).toBeInTheDocument();
   });
 });
