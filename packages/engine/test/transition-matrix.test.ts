@@ -1,16 +1,38 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { makeEngine, newTaskIn } from './helpers.ts';
 
-
 // Independent literal copies of the spec (section 4), not imported from core (AC-11, AC-14).
 const STATUSES = [
-  'new', 'queued_analysis', 'analysing', 'waiting_user', 'ready_to_delegate', 'delegated',
-  'running', 'paused_quota', 'review', 'done', 'failed', 'cancelled',
+  'new',
+  'queued_analysis',
+  'analysing',
+  'waiting_user',
+  'ready_to_delegate',
+  'delegated',
+  'running',
+  'paused_quota',
+  'review',
+  'done',
+  'failed',
+  'cancelled',
 ];
 const EVENTS = [
-  'enqueue', 'analysis_started', 'analysis_ready', 'analysis_needs_info', 'quota', 'failed',
-  'user_answered', 'reanalyse', 'delegate', 'execution_started', 'execution_done', 'credit_limit',
-  'resume', 'review_accepted', 'retry', 'cancel',
+  'enqueue',
+  'analysis_started',
+  'analysis_ready',
+  'analysis_needs_info',
+  'quota',
+  'failed',
+  'user_answered',
+  'reanalyse',
+  'delegate',
+  'execution_started',
+  'execution_done',
+  'credit_limit',
+  'resume',
+  'review_accepted',
+  'retry',
+  'cancel',
 ];
 const TABLE: Record<string, string> = {
   'new|enqueue': 'queued_analysis',
@@ -34,11 +56,22 @@ const TABLE: Record<string, string> = {
 };
 for (const s of STATUSES) if (s !== 'done' && s !== 'cancelled') TABLE[`${s}|cancel`] = 'cancelled';
 const FIXED_TARGET: Record<string, string | null> = {
-  enqueue: 'queued_analysis', analysis_started: 'analysing', analysis_ready: 'ready_to_delegate',
-  analysis_needs_info: 'waiting_user', quota: 'paused_quota', failed: 'failed',
-  user_answered: 'queued_analysis', reanalyse: 'queued_analysis', delegate: 'delegated',
-  execution_started: 'running', execution_done: 'review', credit_limit: 'paused_quota',
-  resume: null, review_accepted: 'done', retry: 'queued_analysis', cancel: 'cancelled',
+  enqueue: 'queued_analysis',
+  analysis_started: 'analysing',
+  analysis_ready: 'ready_to_delegate',
+  analysis_needs_info: 'waiting_user',
+  quota: 'paused_quota',
+  failed: 'failed',
+  user_answered: 'queued_analysis',
+  reanalyse: 'queued_analysis',
+  delegate: 'delegated',
+  execution_started: 'running',
+  execution_done: 'review',
+  credit_limit: 'paused_quota',
+  resume: null,
+  review_accepted: 'done',
+  retry: 'queued_analysis',
+  cancel: 'cancelled',
 };
 
 type Outcome = { kind: 'move'; to: string } | { kind: 'noop' } | { kind: 'throw' };

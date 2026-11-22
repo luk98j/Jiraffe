@@ -36,20 +36,37 @@ The API answers `403` to any request whose `Host` is not `127.0.0.1:<port>` or `
 | Database file | `./data/jiraffe.db` by default, override with `JIRAFFE_DB_PATH`. The `data/` folder is git-ignored. |
 | Server port | `4317` by default, override with `JIRAFFE_PORT`. The host is fixed to `127.0.0.1` and cannot be changed. |
 
-## Test, typecheck, build
+## Checks and formatting
 
 ```sh
 pnpm test        # Vitest, all packages (no network, no Jira credentials needed)
 pnpm typecheck
 pnpm build       # builds the web bundle into packages/web/dist
+pnpm lint        # Biome recommended lint rules; warnings fail CI
+pnpm lint:fix    # apply safe lint fixes
+pnpm format:check
+pnpm format      # format TypeScript, TSX, JSON, CSS and HTML
+pnpm run audit   # fail on high or critical dependency vulnerabilities
 ```
 
 Tests never reach the network: `fetch` is replaced by a stub that throws, and `JIRA_*` variables are removed from the environment.
 
-GitHub Actions runs `pnpm build`, `pnpm typecheck` and `pnpm test` for pull requests
-targeting `main` and pushes to `main`. The workflow uses Node.js from `.nvmrc`,
+GitHub Actions runs lint, formatting checks, `pnpm build`, `pnpm typecheck` and
+`pnpm test` for pull requests targeting `main` and pushes to `main`.
+The workflow uses Node.js from `.nvmrc`,
 pnpm from `package.json`, and a frozen lockfile. It needs no Jira credentials.
 You can also start it manually from the Actions tab after it is merged.
+
+Biome uses the existing two-space indentation and single-quoted JavaScript style.
+Test assertions may use non-null assertions; the stylesheet retains its intentional
+cascade ordering. Other recommended lint rules remain enabled. Generated Drizzle
+metadata, dependencies, build output and local data are excluded from formatting.
+
+The Security workflow audits all locked dependencies (including development tools)
+and runs CodeQL with extended JavaScript/TypeScript security queries on PRs, pushes
+to `main`, and weekly on Mondays. CodeQL publishes findings to GitHub code scanning;
+a successful analysis does not mean there are no findings. Secret scanning and
+push protection are configured separately in the repository's GitHub settings.
 
 ## Connecting Jira (optional, later)
 

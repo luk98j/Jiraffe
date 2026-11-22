@@ -4,11 +4,26 @@ import { STATUS_VIEW, type ActionId } from '../statusView.ts';
 import { NEEDS_USER, analyseDisabledReason, delegateDisabledReason } from '../taskView.ts';
 
 const LABEL: Record<ActionId, string> = {
-  analyse: 'Analyse', cancel: 'Cancel', answer: 'Answer', delegate: 'Delegate', reanalyse: 'Re-analyse',
-  logs: 'Logs', resume: 'Resume', diff: 'Show diff', accept: 'Accept', error: 'Show error', retry: 'Retry', delete: 'Delete',
+  analyse: 'Analyse',
+  cancel: 'Cancel',
+  answer: 'Answer',
+  delegate: 'Delegate',
+  reanalyse: 'Re-analyse',
+  logs: 'Logs',
+  resume: 'Resume',
+  diff: 'Show diff',
+  accept: 'Accept',
+  error: 'Show error',
+  retry: 'Retry',
+  delete: 'Delete',
 };
 const EVENT: Partial<Record<ActionId, string>> = {
-  analyse: 'enqueue', cancel: 'cancel', reanalyse: 'reanalyse', retry: 'retry', resume: 'resume', accept: 'review_accepted',
+  analyse: 'enqueue',
+  cancel: 'cancel',
+  reanalyse: 'reanalyse',
+  retry: 'retry',
+  resume: 'resume',
+  accept: 'review_accepted',
 };
 export const DELETE_CONFIRM = 'Delete this task from the local board? Nothing changes in Jira.';
 
@@ -24,43 +39,80 @@ export function TaskCard({ task, onEvent, onDelete }: Props) {
 
   const action = (id: ActionId) => {
     const label = LABEL[id];
-    if (id === 'answer') return <Link key={id} className="action" to={`/tasks/${task.id}?focus=chat`}>{label}</Link>;
-    if (id === 'logs' || id === 'diff' || id === 'error') return <Link key={id} className="action" to={`/tasks/${task.id}`}>{label}</Link>;
+    if (id === 'answer')
+      return (
+        <Link key={id} className="action" to={`/tasks/${task.id}?focus=chat`}>
+          {label}
+        </Link>
+      );
+    if (id === 'logs' || id === 'diff' || id === 'error')
+      return (
+        <Link key={id} className="action" to={`/tasks/${task.id}`}>
+          {label}
+        </Link>
+      );
     if (id === 'delegate') {
-      return <button key={id} type="button" disabled title={delegateDisabledReason(task)}>{label}</button>;
+      return (
+        <button key={id} type="button" disabled title={delegateDisabledReason(task)}>
+          {label}
+        </button>
+      );
     }
     if (id === 'analyse') {
       const reason = analyseDisabledReason(task);
       return (
-        <button key={id} type="button" disabled={reason !== null} {...(reason ? { title: reason } : {})} onClick={() => onEvent(task, 'enqueue')}>
+        <button
+          key={id}
+          type="button"
+          disabled={reason !== null}
+          {...(reason ? { title: reason } : {})}
+          onClick={() => onEvent(task, 'enqueue')}
+        >
           {label}
         </button>
       );
     }
     if (id === 'delete') {
       return (
-        <button key={id} type="button" onClick={() => window.confirm(DELETE_CONFIRM) && onDelete(task)}>
+        <button
+          key={id}
+          type="button"
+          onClick={() => window.confirm(DELETE_CONFIRM) && onDelete(task)}
+        >
           {label}
         </button>
       );
     }
-    return <button key={id} type="button" onClick={() => onEvent(task, EVENT[id]!)}>{label}</button>;
+    // biome-ignore lint/style/noNonNullAssertion: Non-event action IDs are handled above.
+    const event = EVENT[id]!;
+    return (
+      <button key={id} type="button" onClick={() => onEvent(task, event)}>
+        {label}
+      </button>
+    );
   };
 
   return (
     <article data-testid={`card-${task.key}`} className={`card ${view.colorClass}${highlight}`}>
       <div className="card-head">
         <span className="state">
-          <span data-testid="status-icon" aria-hidden="true">{view.icon}</span> <span>{view.label}</span>
+          <span data-testid="status-icon" aria-hidden="true">
+            {view.icon}
+          </span>{' '}
+          <span>{view.label}</span>
         </span>
         <span className="badge">{task.source === 'jira' ? 'Jira' : 'Local'}</span>
       </div>
-      <Link className="card-key" to={`/tasks/${task.id}`}>{task.key}</Link>
+      <Link className="card-key" to={`/tasks/${task.id}`}>
+        {task.key}
+      </Link>
       <div className="card-title">{task.title}</div>
       <div className="card-repo">{task.repoPath ?? 'No repository'}</div>
       <div className="badges">
         {task.hasNewComment && <span className="badge badge-info">New comment</span>}
-        {task.bodyChangedAfterAnalysis && <span className="badge badge-warn">Description changed in Jira</span>}
+        {task.bodyChangedAfterAnalysis && (
+          <span className="badge badge-warn">Description changed in Jira</span>
+        )}
         {task.jiraClosed && <span className="badge badge-warn">Closed in Jira</span>}
       </div>
       <div className="actions">{view.actions.map(action)}</div>

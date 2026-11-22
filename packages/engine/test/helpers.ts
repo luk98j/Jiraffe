@@ -15,7 +15,10 @@ export interface Harness {
 
 const open: Harness[] = [];
 
-export function makeEngine(opts: Partial<Parameters<typeof createEngine>[0]> = {}, dir?: string): Harness {
+export function makeEngine(
+  opts: Partial<Parameters<typeof createEngine>[0]> = {},
+  dir?: string,
+): Harness {
   const folder = dir ?? mkdtempSync(join(tmpdir(), 'jiraffe-engine-'));
   const path = join(folder, 'test.db');
   const engine = createEngine({ dbPath: path, version: 'test', logger: { error() {} }, ...opts });
@@ -46,15 +49,34 @@ const PATHS: Record<string, string[]> = {
   ready_to_delegate: ['enqueue', 'analysis_started', 'analysis_ready'],
   delegated: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate'],
   running: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started'],
-  review: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started', 'execution_done'],
-  done: ['enqueue', 'analysis_started', 'analysis_ready', 'delegate', 'execution_started', 'execution_done', 'review_accepted'],
+  review: [
+    'enqueue',
+    'analysis_started',
+    'analysis_ready',
+    'delegate',
+    'execution_started',
+    'execution_done',
+  ],
+  done: [
+    'enqueue',
+    'analysis_started',
+    'analysis_ready',
+    'delegate',
+    'execution_started',
+    'execution_done',
+    'review_accepted',
+  ],
   failed: ['enqueue', 'analysis_started', 'failed'],
   paused_quota: ['enqueue', 'analysis_started', 'quota'],
   cancelled: ['cancel'],
 };
 
 /** Creates a local task and walks it to `status` through real transitions. */
-export function newTaskIn(engine: Engine, status: string, pausedFrom: 'analysing' | 'running' = 'analysing'): number {
+export function newTaskIn(
+  engine: Engine,
+  status: string,
+  pausedFrom: 'analysing' | 'running' = 'analysing',
+): number {
   const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath: '/repos/a' });
   const path =
     status === 'paused_quota' && pausedFrom === 'running'
@@ -102,10 +124,20 @@ export function rawTask(
 
 /** Adds a message, run, event and journal row to a task by raw SQL. */
 export function rawChildren(raw: Harness['raw'], taskId: number, key: string): void {
-  raw.prepare("INSERT INTO messages (task_id, role, source, content, created_at) VALUES (?, 'user', 'app', 'm', 'x')").run(taskId);
+  raw
+    .prepare(
+      "INSERT INTO messages (task_id, role, source, content, created_at) VALUES (?, 'user', 'app', 'm', 'x')",
+    )
+    .run(taskId);
   raw.prepare("INSERT INTO runs (task_id, kind) VALUES (?, 'analysis')").run(taskId);
-  raw.prepare("INSERT INTO events (task_id, type, created_at) VALUES (?, 'enqueue', 'x')").run(taskId);
-  raw.prepare("INSERT INTO journal (at, task_key, status, action) VALUES ('2026-01-01T00:00:00.000Z', ?, 'new', 'task_created')").run(key);
+  raw
+    .prepare("INSERT INTO events (task_id, type, created_at) VALUES (?, 'enqueue', 'x')")
+    .run(taskId);
+  raw
+    .prepare(
+      "INSERT INTO journal (at, task_key, status, action) VALUES ('2026-01-01T00:00:00.000Z', ?, 'new', 'task_created')",
+    )
+    .run(key);
 }
 
 import type { JiraIssue } from '@jiraffe/jira';
@@ -127,4 +159,5 @@ export function issue(n: number | string, over: Partial<JiraIssue> = {}): JiraIs
 
 export const journalCount = (h: Harness, action: string) =>
   (h.raw.prepare('SELECT count(*) c FROM journal WHERE action = ?').get(action) as { c: number }).c;
-export const taskCount = (h: Harness) => (h.raw.prepare('SELECT count(*) c FROM tasks').get() as { c: number }).c;
+export const taskCount = (h: Harness) =>
+  (h.raw.prepare('SELECT count(*) c FROM tasks').get() as { c: number }).c;

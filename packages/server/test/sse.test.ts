@@ -7,7 +7,12 @@ import { disposeAll, makeApp } from './helpers.ts';
 afterEach(disposeAll);
 
 function connect(port: number) {
-  return new Promise<{ res: IncomingMessage; chunks: string[]; closed: Promise<void>; destroy(): void }>((resolve, reject) => {
+  return new Promise<{
+    res: IncomingMessage;
+    chunks: string[];
+    closed: Promise<void>;
+    destroy(): void;
+  }>((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port, path: '/api/stream' }, (res) => {
       const chunks: string[] = [];
       res.setEncoding('utf8');

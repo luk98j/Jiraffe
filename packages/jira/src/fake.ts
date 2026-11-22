@@ -1,4 +1,4 @@
-import { JiraError, type JiraClient, type JiraComment, type JiraIssue } from './types.ts';
+import type { JiraError, JiraClient, JiraComment, JiraIssue } from './types.ts';
 
 /** In-memory Jira for tests. `searchPage` ignores the JQL and records it. */
 export class FakeJiraClient implements JiraClient {
@@ -46,7 +46,9 @@ export class FakeJiraClient implements JiraClient {
     await this.enter('searchPage', [jql, cursor]);
     const start = cursor ? Number(cursor) : 0;
     const end = start + this.pageSize;
-    const page: { issues: JiraIssue[]; nextCursor?: string } = { issues: this.issues.slice(start, end) };
+    const page: { issues: JiraIssue[]; nextCursor?: string } = {
+      issues: this.issues.slice(start, end),
+    };
     if (end < this.issues.length) page.nextCursor = String(end);
     return page;
   }

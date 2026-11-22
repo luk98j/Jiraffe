@@ -9,6 +9,7 @@ export interface Req {
   method: string;
   path: string;
   query: URLSearchParams;
+  // biome-ignore lint/suspicious/noExplicitAny: The fetch fake records arbitrary JSON request payloads.
   body: any;
 }
 export type Reply = { status?: number; body?: unknown } | undefined;
@@ -27,7 +28,10 @@ export function installFetch(handler: Handler): { calls: Req[] } {
     };
     calls.push(req);
     const r = handler(req);
-    if (!r) return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Not found' } }), { status: 404 });
+    if (!r)
+      return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Not found' } }), {
+        status: 404,
+      });
     const status = r.status ?? 200;
     return new Response(status === 204 ? null : JSON.stringify(r.body ?? {}), { status });
   }) as typeof fetch;
@@ -36,7 +40,9 @@ export function installFetch(handler: Handler): { calls: Req[] } {
 
 export function renderApp(route: string, handler: Handler) {
   const fetchLog = installFetch(handler);
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
   const user = userEvent.setup();
   const view = render(
     <QueryClientProvider client={queryClient}>

@@ -1,5 +1,11 @@
 import { TaskNotFoundError, ValidationError, type MessageDto } from '@jiraffe/core';
-import { getTaskDto, insertEvent, insertJournal, insertMessage, listMessages as dbListMessages } from '@jiraffe/db';
+import {
+  getTaskDto,
+  insertEvent,
+  insertJournal,
+  insertMessage,
+  listMessages as dbListMessages,
+} from '@jiraffe/db';
 import { write, type Ctx } from './context.ts';
 import { applyTransition } from './transition.ts';
 
@@ -19,7 +25,13 @@ export function addUserMessage(ctx: Ctx, taskId: number, content: string): void 
       if (r.changed) status = r.to;
     }
     // Journal detail names the source only, never the text.
-    insertJournal(tx, { at: now, taskKey: task.key, status, action: 'comment_added', detail: 'source: app' });
+    insertJournal(tx, {
+      at: now,
+      taskKey: task.key,
+      status,
+      action: 'comment_added',
+      detail: 'source: app',
+    });
     outbox.changed();
   });
 }

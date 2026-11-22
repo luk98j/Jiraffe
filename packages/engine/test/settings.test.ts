@@ -75,6 +75,9 @@ describe('settings through the engine', () => {
     const s = engine.readSettings();
     expect(s.values.retention_days).toBe(28);
     expect(s.values.max_parallel_analysis).toBe(2);
-    expect(s.problems.map((p) => p.key).sort()).toEqual(['max_parallel_analysis', 'retention_days']);
+    expect(s.problems.map((p) => p.key).sort()).toEqual([
+      'max_parallel_analysis',
+      'retention_days',
+    ]);
   });
 });

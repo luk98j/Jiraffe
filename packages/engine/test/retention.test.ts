@@ -4,11 +4,13 @@ import { disposeAll, makeEngine, rawChildren, rawTask } from './helpers.ts';
 afterEach(disposeAll);
 
 const NOW = new Date('2026-11-21T12:00:00.000Z');
-const daysAgo = (d: number, extraMs = 0) => new Date(NOW.getTime() - d * 86_400_000 - extraMs).toISOString();
+const daysAgo = (d: number, extraMs = 0) =>
+  new Date(NOW.getTime() - d * 86_400_000 - extraMs).toISOString();
 const fresh = () => makeEngine({ clock: () => NOW });
 const count = (h: ReturnType<typeof makeEngine>, table: string, where = '1=1') =>
   (h.raw.prepare(`SELECT count(*) c FROM ${table} WHERE ${where}`).get() as { c: number }).c;
-const exists = (h: ReturnType<typeof makeEngine>, id: number) => count(h, 'tasks', `id = ${id}`) === 1;
+const exists = (h: ReturnType<typeof makeEngine>, id: number) =>
+  count(h, 'tasks', `id = ${id}`) === 1;
 
 describe('purge of deleted tasks (AC-54, AC-57, AC-84)', () => {
   it('purges only the 29-day task with its children, keeps journal rows, journals task_purged', () => {
@@ -20,8 +22,10 @@ describe('purge of deleted tasks (AC-54, AC-57, AC-84)', () => {
     h.engine.runRetention();
     expect(exists(h, old)).toBe(false);
     expect(exists(h, recent)).toBe(true);
-    for (const t of ['messages', 'runs', 'events']) expect(count(h, t, `task_id = ${old}`), t).toBe(0);
-    for (const t of ['messages', 'runs', 'events']) expect(count(h, t, `task_id = ${recent}`), t).toBe(1);
+    for (const t of ['messages', 'runs', 'events'])
+      expect(count(h, t, `task_id = ${old}`), t).toBe(0);
+    for (const t of ['messages', 'runs', 'events'])
+      expect(count(h, t, `task_id = ${recent}`), t).toBe(1);
     expect(count(h, 'journal', "task_key = 'LOC-0001' AND action = 'task_created'")).toBe(1);
     expect(h.engine.listJournal({ action: 'task_purged' })).toEqual([
       expect.objectContaining({ taskKey: 'LOC-0001', status: 'failed', at: NOW.toISOString() }),
@@ -63,7 +67,9 @@ describe('purge of deleted tasks (AC-54, AC-57, AC-84)', () => {
     h.raw.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(daysAgo(40), t3.id);
     h.engine.runRetention();
     expect(exists(h, t3.id)).toBe(false);
-    expect(h.engine.createLocalTask({ title: 'd', description: '', repoPath: '/r' }).key).toBe('LOC-0004');
+    expect(h.engine.createLocalTask({ title: 'd', description: '', repoPath: '/r' }).key).toBe(
+      'LOC-0004',
+    );
   });
 });
 
@@ -83,7 +89,9 @@ describe('purge of closed-in-Jira tasks (AC-55, AC-56, AC-83)', () => {
   it('writes the tombstone, journal and delete in one transaction', () => {
     const h = fresh();
     const id = rawTask(h.raw, { jiraKey: 'P-1', closedInJiraAt: daysAgo(40) });
-    h.raw.exec("CREATE TRIGGER fail_delete BEFORE DELETE ON tasks BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    h.raw.exec(
+      "CREATE TRIGGER fail_delete BEFORE DELETE ON tasks BEGIN SELECT RAISE(ABORT, 'injected'); END",
+    );
     expect(() => h.engine.runRetention()).toThrow(/injected/);
     h.raw.exec('DROP TRIGGER fail_delete');
     expect(exists(h, id)).toBe(true);

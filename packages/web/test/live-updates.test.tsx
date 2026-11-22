@@ -81,7 +81,13 @@ describe('live updates (AC-69 client)', () => {
   it('does nothing when EventSource is unavailable', () => {
     delete (globalThis as unknown as { EventSource?: unknown }).EventSource;
     const qc = new QueryClient();
-    expect(() => render(<QueryClientProvider client={qc}><Probe /></QueryClientProvider>)).not.toThrow();
+    expect(() =>
+      render(
+        <QueryClientProvider client={qc}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    ).not.toThrow();
     expect(FakeEventSource.instances).toHaveLength(0);
   });
 });

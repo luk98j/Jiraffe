@@ -27,7 +27,15 @@ export function createTask(ctx: Ctx, tx: Tx, outbox: Outbox, input: NewTaskInput
     jiraKey = input.jiraKey;
   }
 
-  const id = insertTask(tx, { source: input.source, jiraKey, localKey, title, body: input.body, repoPath, now });
+  const id = insertTask(tx, {
+    source: input.source,
+    jiraKey,
+    localKey,
+    title,
+    body: input.body,
+    repoPath,
+    now,
+  });
   insertJournal(tx, {
     at: now,
     taskKey: jiraKey ?? localKey,

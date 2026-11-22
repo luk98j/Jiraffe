@@ -4,7 +4,13 @@ import type { MessageDto, TaskDto } from '@jiraffe/core';
 import { renderApp, task } from './helpers.tsx';
 
 const msg = (id: number, over: Partial<MessageDto> = {}): MessageDto => ({
-  id, taskId: 1, role: 'user', source: 'app', content: `m${id}`, createdAt: `2026-11-20T10:0${id}:00.000Z`, ...over,
+  id,
+  taskId: 1,
+  role: 'user',
+  source: 'app',
+  content: `m${id}`,
+  createdAt: `2026-11-20T10:0${id}:00.000Z`,
+  ...over,
 });
 
 function server(initial: { task: TaskDto; messages: MessageDto[] }) {
@@ -13,7 +19,8 @@ function server(initial: { task: TaskDto; messages: MessageDto[] }) {
     if (req.method === 'GET' && req.path === `/api/tasks/${state.task.id}`) return { body: state };
     if (req.method === 'POST' && req.path.endsWith('/messages')) {
       state.messages.push(msg(state.messages.length + 1, { content: req.body.content.trim() }));
-      if (state.task.status === 'waiting_user') state.task = { ...state.task, status: 'queued_analysis' };
+      if (state.task.status === 'waiting_user')
+        state.task = { ...state.task, status: 'queued_analysis' };
       return { status: 201, body: state };
     }
     if (req.method === 'PATCH') {
@@ -28,10 +35,30 @@ function server(initial: { task: TaskDto; messages: MessageDto[] }) {
 describe('task detail (AC-67)', () => {
   it('shows fields, a time-ordered chat with markers, and the labelled empty areas', async () => {
     const { handler } = server({
-      task: task({ id: 1, key: 'PROJ-1', source: 'jira', jiraKey: 'PROJ-1', localKey: null, title: 'Fix it', body: 'Long body', repoPath: '/repos/x', status: 'waiting_user' }),
+      task: task({
+        id: 1,
+        key: 'PROJ-1',
+        source: 'jira',
+        jiraKey: 'PROJ-1',
+        localKey: null,
+        title: 'Fix it',
+        body: 'Long body',
+        repoPath: '/repos/x',
+        status: 'waiting_user',
+      }),
       messages: [
-        msg(2, { role: 'agent', source: 'app', content: 'second', createdAt: '2026-11-20T10:02:00.000Z' }),
-        msg(1, { role: 'user', source: 'jira', content: 'first', createdAt: '2026-11-20T10:01:00.000Z' }),
+        msg(2, {
+          role: 'agent',
+          source: 'app',
+          content: 'second',
+          createdAt: '2026-11-20T10:02:00.000Z',
+        }),
+        msg(1, {
+          role: 'user',
+          source: 'jira',
+          content: 'first',
+          createdAt: '2026-11-20T10:01:00.000Z',
+        }),
       ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     });
     renderApp('/tasks/1', handler);
@@ -41,7 +68,10 @@ describe('task detail (AC-67)', () => {
     expect(screen.getByText('Waiting for you')).toBeInTheDocument();
     expect(screen.getByLabelText('Repository')).toHaveValue('/repos/x');
     const items = screen.getAllByTestId('message');
-    expect(items.map((i) => within(i).getByTestId('message-text').textContent)).toEqual(['first', 'second']);
+    expect(items.map((i) => within(i).getByTestId('message-text').textContent)).toEqual([
+      'first',
+      'second',
+    ]);
     expect(within(items[0]!).getByText('Jira')).toBeInTheDocument();
     expect(within(items[0]!).getByText('You')).toBeInTheDocument();
     expect(within(items[1]!).getByText('App')).toBeInTheDocument();
@@ -64,7 +94,9 @@ describe('task detail (AC-67)', () => {
     const input = await screen.findByLabelText('Repository');
     await user.type(input, '/repos/new');
     await user.click(screen.getByRole('button', { name: 'Save repository' }));
-    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ repoPath: '/repos/new' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ repoPath: '/repos/new' }),
+    );
   });
 
   it('focuses the message input when opened with ?focus=chat and fires no event by itself', async () => {
@@ -103,7 +135,10 @@ describe('chat (AC-68)', () => {
   it('removes the optimistic message and shows the error when sending fails', async () => {
     const { handler } = server({ task: task({ id: 1 }), messages: [] });
     const { user } = renderApp('/tasks/1', (req) =>
-      req.method === 'POST' ? { status: 500, body: { error: { code: 'internal', message: 'Internal server error' } } } : handler(req));
+      req.method === 'POST'
+        ? { status: 500, body: { error: { code: 'internal', message: 'Internal server error' } } }
+        : handler(req),
+    );
     await user.type(await screen.findByLabelText('Message'), 'will fail');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Internal server error');

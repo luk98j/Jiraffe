@@ -21,7 +21,12 @@ describe('user message on a waiting_user task (AC-18)', () => {
 
     expect(h.engine.getTask(id).status).toBe('queued_analysis');
     expect(h.engine.listMessages(id)).toEqual([
-      expect.objectContaining({ role: 'user', source: 'app', content: 'my answer', createdAt: NOW }),
+      expect.objectContaining({
+        role: 'user',
+        source: 'app',
+        content: 'my answer',
+        createdAt: NOW,
+      }),
     ]);
     const ev = h.raw.prepare('SELECT type FROM events ORDER BY id').all() as { type: string }[];
     expect(ev.slice(events0).map((e) => e.type)).toEqual(['user_comment', 'user_answered']);
@@ -54,7 +59,11 @@ describe('user message in any other status (AC-19)', () => {
     expect(h.engine.listMessages(id)).toHaveLength(1);
     const ev = h.raw.prepare('SELECT type FROM events ORDER BY id').all() as { type: string }[];
     expect(ev.slice(events0).map((e) => e.type)).toEqual(['user_comment']);
-    expect(h.engine.listJournal({})[0]).toMatchObject({ action: 'comment_added', status, detail: 'source: app' });
+    expect(h.engine.listJournal({})[0]).toMatchObject({
+      action: 'comment_added',
+      status,
+      detail: 'source: app',
+    });
   });
 });
 

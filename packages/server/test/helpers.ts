@@ -9,6 +9,7 @@ export interface Harness {
   app: ReturnType<typeof buildServer>;
   /** Raw SQL handle for tests only. */
   raw: Engine['ctx']['db']['$client'];
+  // biome-ignore lint/suspicious/noExplicitAny: Test responses cover different endpoint payloads.
   req(method: string, url: string, body?: unknown): Promise<{ status: number; body: any }>;
   dispose(): Promise<void>;
 }
@@ -17,7 +18,12 @@ const open: Harness[] = [];
 
 export function makeApp(opts: Partial<Parameters<typeof createEngine>[0]> = {}): Harness {
   const dir = mkdtempSync(join(tmpdir(), 'jiraffe-server-'));
-  const engine = createEngine({ dbPath: join(dir, 'test.db'), version: '1.2.3', logger: { error() {} }, ...opts });
+  const engine = createEngine({
+    dbPath: join(dir, 'test.db'),
+    version: '1.2.3',
+    logger: { error() {} },
+    ...opts,
+  });
   const app = buildServer(engine);
   const h: Harness = {
     engine,

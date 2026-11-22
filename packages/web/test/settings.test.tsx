@@ -4,12 +4,22 @@ import { SETTINGS, SETTING_KEYS } from '@jiraffe/core';
 import { renderApp, type Req } from './helpers.tsx';
 
 const defaults = () => Object.fromEntries(SETTING_KEYS.map((k) => [k, SETTINGS[k].default]));
-function server(extra: (req: Req) => ReturnType<import('./helpers.tsx').Handler> = () => undefined, sync: object = { state: 'idle', lastRunAt: null, lastError: null, lastSkippedAt: null, lastResult: null }) {
+function server(
+  extra: (req: Req) => ReturnType<import('./helpers.tsx').Handler> = () => undefined,
+  sync: object = {
+    state: 'idle',
+    lastRunAt: null,
+    lastError: null,
+    lastSkippedAt: null,
+    lastResult: null,
+  },
+) {
   const values: Record<string, unknown> = defaults();
   return (req: Req) => {
     const r = extra(req);
     if (r) return r;
-    if (req.method === 'GET' && req.path === '/api/settings') return { body: { values, readOnly: ['local_task_counter'], problems: [] } };
+    if (req.method === 'GET' && req.path === '/api/settings')
+      return { body: { values, readOnly: ['local_task_counter'], problems: [] } };
     if (req.method === 'PUT' && req.path.startsWith('/api/settings/')) {
       values[req.path.split('/').pop()!] = req.body.value;
       return { body: { values, readOnly: ['local_task_counter'], problems: [] } };
@@ -26,7 +36,9 @@ describe('Settings view (AC-72, AC-85)', () => {
     for (const k of SETTING_KEYS) expect(screen.getByLabelText(k), k).toBeInTheDocument();
     expect(screen.getByLabelText('auto_analysis')).not.toBeChecked();
     expect(screen.getByLabelText('retention_days')).toHaveValue(28);
-    expect(screen.getByLabelText('allowed_tools')).toHaveValue(JSON.stringify(SETTINGS.allowed_tools.default, null, 2));
+    expect(screen.getByLabelText('allowed_tools')).toHaveValue(
+      JSON.stringify(SETTINGS.allowed_tools.default, null, 2),
+    );
   });
 
   it('saves a valid number and shows success', async () => {
@@ -40,8 +52,19 @@ describe('Settings view (AC-72, AC-85)', () => {
   });
 
   it('shows the server message for an invalid value and keeps the old value', async () => {
-    const { user } = renderApp('/settings', server((req) =>
-      req.method === 'PUT' ? { status: 400, body: { error: { code: 'validation', message: 'Too small', field: 'max_parallel_analysis' } } } : undefined));
+    const { user } = renderApp(
+      '/settings',
+      server((req) =>
+        req.method === 'PUT'
+          ? {
+              status: 400,
+              body: {
+                error: { code: 'validation', message: 'Too small', field: 'max_parallel_analysis' },
+              },
+            }
+          : undefined,
+      ),
+    );
     const input = await screen.findByLabelText('max_parallel_analysis');
     await user.clear(input);
     await user.type(input, '0');
@@ -54,13 +77,21 @@ describe('Settings view (AC-72, AC-85)', () => {
     const { user, calls } = renderApp('/settings', server());
     await user.click(await screen.findByLabelText('auto_analysis'));
     await user.click(screen.getByRole('button', { name: 'Save auto_analysis' }));
-    await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.path.endsWith('auto_analysis'))?.body).toEqual({ value: true }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'PUT' && c.path.endsWith('auto_analysis'))?.body,
+      ).toEqual({ value: true }),
+    );
 
     const jr = screen.getByLabelText('journal_retention_days');
     await user.type(jr, '30');
     await user.clear(jr);
     await user.click(screen.getByRole('button', { name: 'Save journal_retention_days' }));
-    await waitFor(() => expect(calls.find((c) => c.path.endsWith('journal_retention_days'))?.body).toEqual({ value: null }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path.endsWith('journal_retention_days'))?.body).toEqual({
+        value: null,
+      }),
+    );
 
     const tools = screen.getByLabelText('allowed_tools');
     await user.clear(tools);
@@ -80,26 +111,64 @@ describe('Settings view (AC-72, AC-85)', () => {
 
   it('shows stored-value problems', async () => {
     renderApp('/settings', (req) =>
-      req.path === '/api/settings' ? { body: { values: defaults(), readOnly: [], problems: [{ key: 'retention_days', message: 'Stored value is invalid' }] } } : undefined);
+      req.path === '/api/settings'
+        ? {
+            body: {
+              values: defaults(),
+              readOnly: [],
+              problems: [{ key: 'retention_days', message: 'Stored value is invalid' }],
+            },
+          }
+        : undefined,
+    );
     expect(await screen.findByText(/Stored value is invalid/)).toBeInTheDocument();
   });
 });
 
 describe('Sync panel', () => {
   it('says Jira is not configured', async () => {
-    renderApp('/settings', server(undefined, { state: 'not_configured', lastRunAt: null, lastError: null, lastSkippedAt: null, lastResult: null }));
+    renderApp(
+      '/settings',
+      server(undefined, {
+        state: 'not_configured',
+        lastRunAt: null,
+        lastError: null,
+        lastSkippedAt: null,
+        lastResult: null,
+      }),
+    );
     expect(await screen.findAllByText('Jira not configured')).not.toHaveLength(0);
   });
 
   it('shows the last result and triggers Sync now', async () => {
-    const { user, calls } = renderApp('/settings', server(undefined, { state: 'idle', lastRunAt: '2026-11-21T10:00:00.000Z', lastError: null, lastSkippedAt: null, lastResult: '3 new, 0 updated' }));
+    const { user, calls } = renderApp(
+      '/settings',
+      server(undefined, {
+        state: 'idle',
+        lastRunAt: '2026-11-21T10:00:00.000Z',
+        lastError: null,
+        lastSkippedAt: null,
+        lastResult: '3 new, 0 updated',
+      }),
+    );
     expect(await screen.findByText(/3 new, 0 updated/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Sync now' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/sync')).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/sync')).toBe(true),
+    );
   });
 
   it('shows a sync error message', async () => {
-    renderApp('/settings', server(undefined, { state: 'error', lastRunAt: null, lastError: 'Jira rejected the credentials (HTTP 401)', lastSkippedAt: null, lastResult: null }));
+    renderApp(
+      '/settings',
+      server(undefined, {
+        state: 'error',
+        lastRunAt: null,
+        lastError: 'Jira rejected the credentials (HTTP 401)',
+        lastSkippedAt: null,
+        lastResult: null,
+      }),
+    );
     expect(await screen.findByText(/Jira rejected the credentials/)).toBeInTheDocument();
   });
 });

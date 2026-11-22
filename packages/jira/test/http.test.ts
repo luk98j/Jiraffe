@@ -14,14 +14,24 @@ function client(handler: (url: URL, init: RequestInit) => Response | Promise<Res
     calls.push({ url, init });
     return handler(url, init);
   }) as typeof fetch;
-  return { calls, jira: createHttpJiraClient({ baseUrl: 'https://x.atlassian.net', email: EMAIL, token: TOKEN, fetch: fetchFn }) };
+  return {
+    calls,
+    jira: createHttpJiraClient({
+      baseUrl: 'https://x.atlassian.net',
+      email: EMAIL,
+      token: TOKEN,
+      fetch: fetchFn,
+    }),
+  };
 }
 const json = (body: string, status = 200) => new Response(body, { status });
 
 describe('createHttpJiraClient', () => {
   it('sends basic auth and maps issues and the cursor', async () => {
     const { jira, calls } = client((url) =>
-      json(fixture(url.searchParams.get('nextPageToken') ? 'search-page2.json' : 'search-page1.json')),
+      json(
+        fixture(url.searchParams.get('nextPageToken') ? 'search-page2.json' : 'search-page1.json'),
+      ),
     );
     const p1 = await jira.searchPage('assignee = currentUser()');
     expect(p1.nextCursor).toBe('tok-2');

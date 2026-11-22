@@ -10,7 +10,11 @@ import { runTaskSync } from './sync.ts';
  */
 export async function startEngine(ctx: Ctx): Promise<void> {
   write(ctx, (tx, outbox) => {
-    insertJournal(tx, { at: ctx.clock().toISOString(), action: 'app_started', detail: ctx.version });
+    insertJournal(tx, {
+      at: ctx.clock().toISOString(),
+      action: 'app_started',
+      detail: ctx.version,
+    });
     outbox.changed();
   });
   try {

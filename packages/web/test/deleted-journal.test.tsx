@@ -17,18 +17,30 @@ describe('Deleted view (AC-70)', () => {
     expect(within(row).getByText('Old one')).toBeInTheDocument();
     expect(within(row).getByText(/2026-11-19/)).toBeInTheDocument();
     await user.click(within(row).getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/tasks/1/restore')).toBe(true));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/tasks/1/restore')).toBe(
+        true,
+      ),
+    );
     expect(await screen.findByText('No deleted tasks')).toBeInTheDocument();
   });
 
   it('shows the empty state', async () => {
-    renderApp('/deleted', (req) => (req.path === '/api/deleted' ? { body: { tasks: [] } } : undefined));
+    renderApp('/deleted', (req) =>
+      req.path === '/api/deleted' ? { body: { tasks: [] } } : undefined,
+    );
     expect(await screen.findByText('No deleted tasks')).toBeInTheDocument();
   });
 });
 
 const entry = (id: number, over: Partial<JournalDto>): JournalDto => ({
-  id, at: `2026-11-2${id}T10:00:00.000Z`, taskKey: 'PROJ-1', status: 'new', action: 'task_imported', detail: null, ...over,
+  id,
+  at: `2026-11-2${id}T10:00:00.000Z`,
+  taskKey: 'PROJ-1',
+  status: 'new',
+  action: 'task_imported',
+  detail: null,
+  ...over,
 });
 
 describe('Journal view (AC-71)', () => {
@@ -39,10 +51,21 @@ describe('Journal view (AC-71)', () => {
   ];
 
   it('shows date, key, status and action in the order returned, with an empty key cell', async () => {
-    renderApp('/journal', (req) => (req.path === '/api/journal' ? { body: { entries: rows } } : undefined));
+    renderApp('/journal', (req) =>
+      req.path === '/api/journal' ? { body: { entries: rows } } : undefined,
+    );
     expect(await screen.findAllByTestId('journal-row')).toHaveLength(3);
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Date', 'Task key', 'Status', 'Action']);
-    const cells = screen.getAllByTestId('journal-row').map((r) => within(r).getAllByRole('cell').map((c) => c.textContent));
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Date',
+      'Task key',
+      'Status',
+      'Action',
+    ]);
+    const cells = screen.getAllByTestId('journal-row').map((r) =>
+      within(r)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    );
     expect(cells[0]).toEqual(['2026-11-23 10:00:00', '', '', 'sync_run']);
     expect(cells[1]).toEqual(['2026-11-22 10:00:00', 'PROJ-2', 'analysing', 'status_changed']);
     expect(cells[2]![3]).toBe('task_imported');

@@ -15,9 +15,20 @@ describe('one transition (AC-12)', () => {
     const journal0 = h.engine.listJournal({}).length;
     h.engine.transition(id, 'analysis_ready');
     expect(h.raw.prepare('SELECT count(*) c FROM events').get()).toEqual({ c: events0.c + 1 });
-    const ev = h.raw.prepare('SELECT * FROM events ORDER BY id DESC LIMIT 1').get() as Record<string, unknown>;
-    expect(ev).toMatchObject({ task_id: id, type: 'analysis_ready', processed_at: null, created_at: NOW });
-    expect(JSON.parse(ev.payload_json as string)).toEqual({ from: 'analysing', to: 'ready_to_delegate' });
+    const ev = h.raw.prepare('SELECT * FROM events ORDER BY id DESC LIMIT 1').get() as Record<
+      string,
+      unknown
+    >;
+    expect(ev).toMatchObject({
+      task_id: id,
+      type: 'analysis_ready',
+      processed_at: null,
+      created_at: NOW,
+    });
+    expect(JSON.parse(ev.payload_json as string)).toEqual({
+      from: 'analysing',
+      to: 'ready_to_delegate',
+    });
     const rows = h.engine.listJournal({});
     expect(rows).toHaveLength(journal0 + 1);
     expect(rows[0]).toMatchObject({
@@ -40,7 +51,9 @@ describe('atomicity (AC-13, AC-20)', () => {
       journal: h.raw.prepare('SELECT * FROM journal').all(),
     });
     const before = snap();
-    h.raw.exec("CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    h.raw.exec(
+      "CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END",
+    );
     expect(() => h.engine.transition(id, 'analysis_ready')).toThrow(/injected/);
     h.raw.exec('DROP TRIGGER fail_journal');
     expect(snap()).toEqual(before);
@@ -51,16 +64,26 @@ describe('atomicity (AC-13, AC-20)', () => {
     const id = newTaskIn(h.engine, 'analysing');
     const seen: unknown[] = [];
     let changed = 0;
-    h.engine.bus.onEvent((e) => seen.push({ ...e, statusInHandler: h.engine.getTask(e.taskId).status }));
+    h.engine.bus.onEvent((e) =>
+      seen.push({ ...e, statusInHandler: h.engine.getTask(e.taskId).status }),
+    );
     h.engine.bus.onChanged(() => changed++);
 
     h.engine.transition(id, 'analysis_ready');
     expect(seen).toEqual([
-      { taskId: id, type: 'analysis_ready', from: 'analysing', to: 'ready_to_delegate', statusInHandler: 'ready_to_delegate' },
+      {
+        taskId: id,
+        type: 'analysis_ready',
+        from: 'analysing',
+        to: 'ready_to_delegate',
+        statusInHandler: 'ready_to_delegate',
+      },
     ]);
     expect(changed).toBe(1);
 
-    h.raw.exec("CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    h.raw.exec(
+      "CREATE TRIGGER fail_journal BEFORE INSERT ON journal BEGIN SELECT RAISE(ABORT, 'injected'); END",
+    );
     expect(() => h.engine.transition(id, 'delegate')).toThrow();
     h.raw.exec('DROP TRIGGER fail_journal');
     expect(seen).toHaveLength(1);
@@ -85,7 +108,10 @@ describe('pause and resume (AC-15, AC-16, AC-17)', () => {
   ] as const)('%s + %s stores the previous status, reason and resume time', (from, event) => {
     const h = fresh();
     const id = newTaskIn(h.engine, from);
-    h.engine.transition(id, event, { pauseReason: 'limit hit', resumeAt: '2026-11-22T00:00:00.000Z' });
+    h.engine.transition(id, event, {
+      pauseReason: 'limit hit',
+      resumeAt: '2026-11-22T00:00:00.000Z',
+    });
     expect(h.engine.getTask(id)).toMatchObject({
       status: 'paused_quota',
       statusBeforePause: from,
@@ -101,25 +127,33 @@ describe('pause and resume (AC-15, AC-16, AC-17)', () => {
     expect(h.engine.getTask(id)).toMatchObject({ pauseReason: null, resumeAt: null });
   });
 
-  it.each(['analysing', 'running'] as const)('resume goes back to %s and clears all pause fields', (from) => {
-    const h = fresh();
-    const id = newTaskIn(h.engine, 'paused_quota', from);
-    h.engine.transition(id, 'quota', { pauseReason: 'x', resumeAt: NOW }); // repeated delivery: no-op keeps data
-    h.engine.transition(id, 'resume');
-    expect(h.engine.getTask(id)).toMatchObject({
-      status: from,
-      statusBeforePause: null,
-      pauseReason: null,
-      resumeAt: null,
-    });
-  });
+  it.each(['analysing', 'running'] as const)(
+    'resume goes back to %s and clears all pause fields',
+    (from) => {
+      const h = fresh();
+      const id = newTaskIn(h.engine, 'paused_quota', from);
+      h.engine.transition(id, 'quota', { pauseReason: 'x', resumeAt: NOW }); // repeated delivery: no-op keeps data
+      h.engine.transition(id, 'resume');
+      expect(h.engine.getTask(id)).toMatchObject({
+        status: from,
+        statusBeforePause: null,
+        pauseReason: null,
+        resumeAt: null,
+      });
+    },
+  );
 
   it('resume clears pause_reason and resume_at that were stored', () => {
     const h = fresh();
     const id = newTaskIn(h.engine, 'running');
     h.engine.transition(id, 'credit_limit', { pauseReason: 'r', resumeAt: NOW });
     h.engine.transition(id, 'resume');
-    expect(h.engine.getTask(id)).toMatchObject({ status: 'running', statusBeforePause: null, pauseReason: null, resumeAt: null });
+    expect(h.engine.getTask(id)).toMatchObject({
+      status: 'running',
+      statusBeforePause: null,
+      pauseReason: null,
+      resumeAt: null,
+    });
   });
 
   it('resume throws outside paused_quota even with a stale status_before_pause, and changes nothing', () => {
@@ -163,7 +197,10 @@ describe('guards (AC-21)', () => {
     expect(() => h.engine.transition(id, 'enqueue')).toThrow('Choose a repository first');
     expect(h.engine.getTask(id).status).toBe('new');
     h.engine.setRepository(id, '/repos/a');
-    expect(h.engine.transition(id, 'enqueue')).toMatchObject({ changed: true, to: 'queued_analysis' });
+    expect(h.engine.transition(id, 'enqueue')).toMatchObject({
+      changed: true,
+      to: 'queued_analysis',
+    });
   });
 });
 

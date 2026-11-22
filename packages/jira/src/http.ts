@@ -21,7 +21,11 @@ function adfToText(node: unknown): string {
   if (n.type === 'text') return n.text ?? '';
   if (n.type === 'hardBreak') return '\n';
   const children = (n.content ?? []).map(adfToText);
-  const block = n.type === 'doc' || n.type === 'listItem' || n.type === 'bulletList' || n.type === 'orderedList';
+  const block =
+    n.type === 'doc' ||
+    n.type === 'listItem' ||
+    n.type === 'bulletList' ||
+    n.type === 'orderedList';
   return children.join(block ? '\n' : '');
 }
 
@@ -88,10 +92,19 @@ export function createHttpJiraClient(opts: {
   }
 
   async function searchPage(jql: string, cursor?: string) {
-    const params: Record<string, string> = { jql, fields: SEARCH_FIELDS, maxResults: String(CHUNK) };
+    const params: Record<string, string> = {
+      jql,
+      fields: SEARCH_FIELDS,
+      maxResults: String(CHUNK),
+    };
     if (cursor) params.nextPageToken = cursor;
-    const body = await get<{ issues?: RawIssue[]; nextPageToken?: string }>('/rest/api/3/search/jql', params);
-    const page: { issues: JiraIssue[]; nextCursor?: string } = { issues: (body.issues ?? []).map(toIssue) };
+    const body = await get<{ issues?: RawIssue[]; nextPageToken?: string }>(
+      '/rest/api/3/search/jql',
+      params,
+    );
+    const page: { issues: JiraIssue[]; nextCursor?: string } = {
+      issues: (body.issues ?? []).map(toIssue),
+    };
     if (body.nextPageToken) page.nextCursor = body.nextPageToken;
     return page;
   }
@@ -126,7 +139,8 @@ export function createHttpJiraClient(opts: {
           total?: number;
         }>(`/rest/api/3/issue/${key}/comment`, { startAt: String(startAt), maxResults: '100' });
         const list = body.comments ?? [];
-        for (const c of list) out.push({ id: String(c.id), body: adfToText(c.body), createdAt: toIso(c.created) });
+        for (const c of list)
+          out.push({ id: String(c.id), body: adfToText(c.body), createdAt: toIso(c.created) });
         startAt += list.length;
         if (list.length === 0 || startAt >= (body.total ?? 0)) return out;
       }

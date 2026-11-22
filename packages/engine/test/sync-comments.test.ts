@@ -5,22 +5,42 @@ import { BASE_URL, disposeAll, journalCount, makeEngine, newTaskIn, rawTask } fr
 afterEach(disposeAll);
 
 const NOW = '2026-11-21T10:00:00.000Z';
-const c = (id: string, body = `text ${id}`) => ({ id, body, createdAt: '2026-11-20T09:00:00.000Z' });
+const c = (id: string, body = `text ${id}`) => ({
+  id,
+  body,
+  createdAt: '2026-11-20T09:00:00.000Z',
+});
 function setup() {
   const jira = new FakeJiraClient();
   const h = makeEngine({ jiraClient: jira, clock: () => new Date(NOW) });
   h.engine.updateSetting('jira_base_url', BASE_URL);
   return { jira, h };
 }
-const queried = (jira: FakeJiraClient) => jira.calls.filter((x) => x.method === 'getComments').map((x) => x.args[0]).sort();
+const queried = (jira: FakeJiraClient) =>
+  jira.calls
+    .filter((x) => x.method === 'getComments')
+    .map((x) => x.args[0])
+    .sort();
 
 describe('which tasks are queried (AC-38, AC-50)', () => {
   it('queries only the four statuses, never new, other statuses, local or deleted tasks', async () => {
     const { jira, h } = setup();
-    for (const [key, status] of [['P-1', 'new'], ['P-2', 'waiting_user'], ['P-3', 'ready_to_delegate'], ['P-4', 'running'], ['P-5', 'paused_quota'], ['P-6', 'queued_analysis'], ['P-7', 'review']] as const) {
+    for (const [key, status] of [
+      ['P-1', 'new'],
+      ['P-2', 'waiting_user'],
+      ['P-3', 'ready_to_delegate'],
+      ['P-4', 'running'],
+      ['P-5', 'paused_quota'],
+      ['P-6', 'queued_analysis'],
+      ['P-7', 'review'],
+    ] as const) {
       rawTask(h.raw, { jiraKey: key, status });
     }
-    rawTask(h.raw, { jiraKey: 'P-8', status: 'waiting_user', deletedAt: '2026-11-01T00:00:00.000Z' });
+    rawTask(h.raw, {
+      jiraKey: 'P-8',
+      status: 'waiting_user',
+      deletedAt: '2026-11-01T00:00:00.000Z',
+    });
     newTaskIn(h.engine, 'waiting_user'); // local task
     await h.engine.runCommentSync();
     expect(queried(jira)).toEqual(['P-2', 'P-3', 'P-4', 'P-5']);
@@ -41,9 +61,27 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     const id = rawTask(h.raw, { jiraKey: 'P-4', status: 'running' });
     jira.setComments('P-4', [c('10'), c('11')]);
     await h.engine.runCommentSync();
-    expect(h.raw.prepare('SELECT role, source, content, jira_comment_id, created_at FROM messages WHERE task_id = ? ORDER BY id').all(id)).toEqual([
-      { role: 'user', source: 'jira', content: 'text 10', jira_comment_id: '10', created_at: '2026-11-20T09:00:00.000Z' },
-      { role: 'user', source: 'jira', content: 'text 11', jira_comment_id: '11', created_at: '2026-11-20T09:00:00.000Z' },
+    expect(
+      h.raw
+        .prepare(
+          'SELECT role, source, content, jira_comment_id, created_at FROM messages WHERE task_id = ? ORDER BY id',
+        )
+        .all(id),
+    ).toEqual([
+      {
+        role: 'user',
+        source: 'jira',
+        content: 'text 10',
+        jira_comment_id: '10',
+        created_at: '2026-11-20T09:00:00.000Z',
+      },
+      {
+        role: 'user',
+        source: 'jira',
+        content: 'text 11',
+        jira_comment_id: '11',
+        created_at: '2026-11-20T09:00:00.000Z',
+      },
     ]);
     expect(h.engine.getTask(id).status).toBe('running');
   });
@@ -55,10 +93,18 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     await h.engine.runCommentSync();
     const added = h.engine.listJournal({ action: 'comment_added' });
     expect(added).toHaveLength(2);
-    expect(added.every((j) => j.detail === 'source: jira' && j.taskKey === 'P-4' && j.status === 'running')).toBe(true);
+    expect(
+      added.every(
+        (j) => j.detail === 'source: jira' && j.taskKey === 'P-4' && j.status === 'running',
+      ),
+    ).toBe(true);
     expect(JSON.stringify(h.engine.listJournal({}))).not.toContain('secret');
-    expect(h.engine.listJournal({ action: 'sync_run' })).toEqual([expect.objectContaining({ taskKey: null, status: null, detail: 'comments: 2 new' })]);
-    expect(h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'user_comment'").get()).toEqual({ c: 0 });
+    expect(h.engine.listJournal({ action: 'sync_run' })).toEqual([
+      expect.objectContaining({ taskKey: null, status: null, detail: 'comments: 2 new' }),
+    ]);
+    expect(
+      h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'user_comment'").get(),
+    ).toEqual({ c: 0 });
   });
 
   it('a second run adds no duplicates and no journal rows', async () => {
@@ -80,7 +126,12 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     jira.setComments('P-4', [c('10'), c('11')]);
     await h.engine.runCommentSync();
     expect(h.engine.listMessages(id)).toHaveLength(2);
-    expect(h.engine.listJournal({ action: 'sync_run' }).map((j) => j.detail).sort()).toEqual(['comments: 1 new', 'comments: 1 new']);
+    expect(
+      h.engine
+        .listJournal({ action: 'sync_run' })
+        .map((j) => j.detail)
+        .sort(),
+    ).toEqual(['comments: 1 new', 'comments: 1 new']);
   });
 
   it('a waiting_user task goes to queued_analysis through user_answered', async () => {
@@ -89,7 +140,9 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     jira.setComments('P-2', [c('10'), c('11')]);
     await h.engine.runCommentSync();
     expect(h.engine.getTask(id).status).toBe('queued_analysis');
-    expect(h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'user_answered'").get()).toEqual({ c: 1 });
+    expect(
+      h.raw.prepare("SELECT count(*) c FROM events WHERE type = 'user_answered'").get(),
+    ).toEqual({ c: 1 });
     expect(journalCount(h, 'status_changed')).toBe(1);
   });
 

@@ -48,9 +48,15 @@ describe('resolveTransition (AC-10)', () => {
     expect(resolveTransition(from, 'cancel', null)).toEqual({ kind: 'move', to: 'cancelled' });
   });
 
-  it.each(['running', 'analysing'] as const)('resume returns status_before_pause (%s)', (before) => {
-    expect(resolveTransition('paused_quota', 'resume', before)).toEqual({ kind: 'move', to: before });
-  });
+  it.each(['running', 'analysing'] as const)(
+    'resume returns status_before_pause (%s)',
+    (before) => {
+      expect(resolveTransition('paused_quota', 'resume', before)).toEqual({
+        kind: 'move',
+        to: before,
+      });
+    },
+  );
 });
 
 describe('resolveTransition no-ops and errors (A16)', () => {

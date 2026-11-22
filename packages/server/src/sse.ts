@@ -11,7 +11,11 @@ export function registerSse(app: FastifyInstance, engine: Engine): void {
   app.get('/api/stream', (req, reply) => {
     reply.hijack();
     const res = reply.raw;
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'close' });
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'close',
+    });
     res.write('retry: 2000\n\n');
     const off = engine.bus.onChanged(() => {
       res.write(`event: change\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);

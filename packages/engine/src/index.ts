@@ -9,7 +9,16 @@ import { runCommentSync, runTaskSync } from './sync.ts';
 import { runRetention } from './retention.ts';
 import { addUserMessage, listMessages } from './messages.ts';
 import { transition } from './transition.ts';
-import { createLocalTask, deleteTask, getTask, getTaskDetail, listDeleted, listTasks, restoreTask, setRepository } from './tasks.ts';
+import {
+  createLocalTask,
+  deleteTask,
+  getTask,
+  getTaskDetail,
+  listDeleted,
+  listTasks,
+  restoreTask,
+  setRepository,
+} from './tasks.ts';
 
 export { Bus, type DomainEvent, type Logger } from './bus.ts';
 export type { Ctx } from './context.ts';
@@ -23,7 +32,9 @@ export interface EngineOptions {
 }
 
 export function createEngine(opts: EngineOptions) {
-  const logger = opts.logger ?? { error: (m, e) => console.error(m, e instanceof Error ? e.message : '') };
+  const logger = opts.logger ?? {
+    error: (m, e) => console.error(m, e instanceof Error ? e.message : ''),
+  };
   const db = openDb(opts.dbPath);
   migrateDb(db);
   seedSettings(db);
@@ -34,7 +45,13 @@ export function createEngine(opts: EngineOptions) {
     logger,
     sync: {
       inFlight: false,
-      state: { state: 'idle', lastRunAt: null, lastError: null, lastSkippedAt: null, lastResult: null },
+      state: {
+        state: 'idle',
+        lastRunAt: null,
+        lastError: null,
+        lastSkippedAt: null,
+        lastResult: null,
+      },
     },
     version: opts.version,
     ...(opts.jiraClient ? { jiraClient: opts.jiraClient } : {}),
@@ -47,7 +64,9 @@ export function createEngine(opts: EngineOptions) {
     readSettings: () => readSettings(ctx),
     getSetting: <K extends Parameters<typeof getSetting>[1]>(key: K) => getSetting(ctx, key),
     updateSetting: (key: string, value: unknown) => updateSetting(ctx, key, value),
-    transition: (...args: Parameters<typeof transition> extends [unknown, ...infer R] ? R : never) => transition(ctx, ...args),
+    transition: (
+      ...args: Parameters<typeof transition> extends [unknown, ...infer R] ? R : never
+    ) => transition(ctx, ...args),
     createLocalTask: (input: Parameters<typeof createLocalTask>[1]) => createLocalTask(ctx, input),
     setRepository: (id: number, path: string) => setRepository(ctx, id, path),
     deleteTask: (id: number) => deleteTask(ctx, id),

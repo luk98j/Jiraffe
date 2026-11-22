@@ -1,4 +1,12 @@
-import { SETTINGS, SETTING_KEYS, ValidationError, parseSetting, type SettingKey, type SettingValue, type SettingsDto } from '@jiraffe/core';
+import {
+  SETTINGS,
+  SETTING_KEYS,
+  ValidationError,
+  parseSetting,
+  type SettingKey,
+  type SettingValue,
+  type SettingsDto,
+} from '@jiraffe/core';
 import { insertJournal, readSettingRows, upsertSetting } from '@jiraffe/db';
 import { write, type Ctx } from './context.ts';
 
@@ -22,7 +30,10 @@ export function readSettings(ctx: Ctx): SettingsDto {
     if (parsed.ok) values[key] = parsed.value;
     else {
       values[key] = SETTINGS[key].default;
-      problems.push({ key, message: `Stored value is invalid, using the default: ${parsed.message}` });
+      problems.push({
+        key,
+        message: `Stored value is invalid, using the default: ${parsed.message}`,
+      });
     }
   }
   const readOnly = SETTING_KEYS.filter((k) => 'readOnly' in SETTINGS[k]);

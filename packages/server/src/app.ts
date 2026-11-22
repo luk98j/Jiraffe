@@ -24,23 +24,36 @@ export function buildServer(engine: Engine) {
     const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
     const host = (req.headers.host ?? '').toLowerCase();
     const origin = req.headers.origin;
-    if (!hosts.includes(host) || (origin !== undefined && !hosts.some((h) => origin === `http://${h}`))) {
-      return reply.code(403).send({ error: { code: 'forbidden', message: 'Forbidden' } } satisfies ApiError);
+    if (
+      !hosts.includes(host) ||
+      (origin !== undefined && !hosts.some((h) => origin === `http://${h}`))
+    ) {
+      return reply
+        .code(403)
+        .send({ error: { code: 'forbidden', message: 'Forbidden' } } satisfies ApiError);
     }
   });
 
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     if (err instanceof AppError) {
       const body: ApiError = {
-        error: { code: err.code, message: err.message, ...('field' in err && err.field ? { field: err.field as string } : {}) },
+        error: {
+          code: err.code,
+          message: err.message,
+          ...('field' in err && err.field ? { field: err.field as string } : {}),
+        },
       };
       return reply.code(STATUS[err.code] ?? 400).send(body);
     }
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
-      return reply.code(400).send({ error: { code: 'bad_request', message: 'Invalid request' } } satisfies ApiError);
+      return reply
+        .code(400)
+        .send({ error: { code: 'bad_request', message: 'Invalid request' } } satisfies ApiError);
     }
     app.log.error(err);
-    return reply.code(500).send({ error: { code: 'internal', message: 'Internal server error' } } satisfies ApiError);
+    return reply
+      .code(500)
+      .send({ error: { code: 'internal', message: 'Internal server error' } } satisfies ApiError);
   });
   app.setNotFoundHandler((_req, reply) =>
     reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } } satisfies ApiError),

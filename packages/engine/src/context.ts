@@ -1,7 +1,7 @@
 import type { Db, Tx } from '@jiraffe/db';
 import type { JiraClient } from '@jiraffe/jira';
 import type { SyncStateDto } from '@jiraffe/core';
-import { Bus, type DomainEvent, type Logger } from './bus.ts';
+import type { Bus, DomainEvent, Logger } from './bus.ts';
 
 export interface Ctx {
   db: Db;
