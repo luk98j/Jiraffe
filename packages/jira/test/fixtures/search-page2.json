@@ -1,0 +1,13 @@
+{
+  "issues": [
+    {
+      "key": "ABC-7",
+      "fields": {
+        "summary": "Third",
+        "description": null,
+        "status": { "name": "Done", "statusCategory": { "key": "done" } },
+        "project": { "key": "ABC" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@jiraffe/jira",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./testing": "./src/fake.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@jiraffe/core": "workspace:*" }
+}
