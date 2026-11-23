@@ -301,6 +301,19 @@ All settings live in the `settings` table, are editable in the UI, and need no r
 6. Delegate, worktrees and execution with logs and review.
 7. Quota handling, `onBoot` recovery. Claude Code adapter only after that.
 
+**Status:** steps 1-7 are built. Known deviations of steps 5-7 from this spec:
+
+- D1. Three settings were added to section 10: `run_timeout_minutes` (1 to 1440, default 30), `execution_prompt_template` (fixed placeholders `{{task_key}}`, `{{title}}`, `{{body}}`, `{{context}}`, `{{context}}` required) and `agent` (`copilot` or `claude`, default `copilot`).
+- D2. `runs.status` is `running` or `finished`; `runs` gained `result_json`, `worktree_path`, `branch` and `base_commit`.
+- D3. New endpoints: `POST /api/queue/start`, `GET /api/queue`, `POST /api/tasks/:id/delegate` (409 with the reason when blocked), `GET /api/tasks/:id/logs?after=&limit=` (returns `lines`, `truncated`, `hasMore`), `GET /api/tasks/:id/diff`, and `DELETE /api/tasks/:id?removeWorktree=1` (also removes that task's worktree and branch; answers 204 normally, but when the worktree or branch removal is refused or fails, for example because the branch was not created by Jiraffe or the agent is still stopping, it answers 200 with `{removalError}` and the task stays deleted). The generic events endpoint still accepts UI events only.
+- D4. The worker claim goes through `transition()` (`analysis_started`) instead of the raw SQL in section 5.
+- D5. Recovery moves outside the section 4 table: `analysing -> queued_analysis` and `running -> delegated`, made only at boot by `recoverTask` in `packages/engine/src/transition.ts`, with event types `recovered_to_queued_analysis` and `recovered_to_delegated`. Three more non-transition event types exist: `agent_output`, `log_truncated`, `run_error`.
+- X1. `delegated -> failed` is not in section 4. When execution cannot start (repo missing, git error, bad path, unverified adapter), one transaction applies `execution_started` and then `failed`, so the task is never seen as running but the journal shows both moves.
+- X3 to X5. `runs.agent` holds the adapter id and the analyst or architect role is in `result_json`; the architect run is skipped when the analyst does not return a clean READY; a credit limit during analysis uses the `quota` event.
+- Environment stripping. `JIRA_EMAIL` and `JIRA_API_TOKEN` are removed from the environment of agent and git child processes (`packages/adapters/src/spawner.ts`), and their exact values are redacted from stored logs.
+- Stale pids found at boot are not signalled; a leftover agent from a crashed app run can keep running.
+- Real analysis with Copilot is not fail-closed. Only execution (and every Claude run) is refused until section 12 is resolved.
+
 **Acceptance tests**
 
 - [ ] Every allowed transition works. Every other combination throws.
@@ -319,12 +332,14 @@ All settings live in the `settings` table, are editable in the UI, and need no r
 
 ## 12. Open items to verify before coding
 
-None of these is confirmed. Check each in `copilot --help` or the documentation and record the result here.
+Check each in `copilot --help` or the documentation and record the result here. Status after steps 5-7 (the `copilot` and `claude` binaries were not available when they were built, so nothing below was run against a real CLI):
 
-1. Flag or setting that restricts tools (the allowlist) in `-p` mode, and its exact syntax.
-2. How to resume a session by `session_id` in non-interactive mode.
-3. Exit code and message format when `--max-ai-credits` or a weekly or monthly usage limit is reached.
-4. Whether `@github/copilot-sdk` (public preview) gives better session control than spawning the CLI, and how stable its API is.
-5. Whether your Copilot plan and terms allow automating the CLI.
-6. Jira: `statusCategory` and status names in your instance, and which Jira auth method is available (API token or OAuth).
-7. Delete-and-restore of a task whose worktree was removed: confirm that restore only brings back the task record, not the worktree.
+1. Flag or setting that restricts tools (the allowlist) in `-p` mode, and its exact syntax. **Open.** The capability profile in `packages/adapters/src/copilot.ts` has the `allowTool` entry marked unverified with no flag text. Execution fails closed: `canDelegate()` is false with "Tool restriction flag is not confirmed (spec section 12 item 1)". `allowed_tools` entries containing a `git push`, `--yolo` or blanket-allow form are rejected even after the flag is confirmed.
+2. How to resume a session by `session_id` in non-interactive mode. **Open.** The `resume` entry is unverified and unused; a resumed or recovered task starts a fresh run.
+3. Exit code and message format when `--max-ai-credits` or a weekly or monthly usage limit is reached. **Open.** `quota_error_patterns` is empty by default (nothing is classified as quota), the exit-code rule is disabled, and `credits_used` and the reset time are not parsed. Without a reset time, `resume_at` is now plus `quota_retry_minutes`.
+4. Whether `@github/copilot-sdk` (public preview) gives better session control than spawning the CLI. **Decided:** the CLI is spawned behind the `AgentRunner` interface; no SDK dependency.
+5. Whether your Copilot plan and terms allow automating the CLI. **Open, owner only.**
+6. Jira: `statusCategory`, status names and auth method. **Handled in step 3** (API token; the HTTP client is tested against fixtures only).
+7. Delete-and-restore of a task whose worktree was removed. **Verified in tests and implemented:** restore brings back only the task record; the worktree and branch are removed only when the delete request asks for it.
+
+Confirmed in the documentation and used by the adapter: `-p`, `--max-ai-credits`, `--agent=` and `--model=`. Claude Code: every capability entry in `packages/adapters/src/claude.ts` is unverified, so Claude runs end with "Claude Code adapter is not verified" until the owner confirms the flags.

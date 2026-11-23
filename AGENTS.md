@@ -8,7 +8,8 @@ Jiraffe is a local web app: a Jira task board with local tasks, per-task chat an
 
 - The spec and source of truth is [docs/implementation-plan.md](docs/implementation-plan.md).
 - Steps 1-4 of its section 11 (board foundation) are built and merged.
-- Steps 5-7 are **not built** and are separate work: workers and slots, Copilot CLI adapter, delegate and worktrees, `allowed_tools` enforcement, quota handling, `onBoot` recovery, Claude Code adapter. Do not start them as a side effect of another task.
+- Steps 5-7 are built: workers and slots, Copilot CLI adapter, analysis, delegate and worktrees, `allowed_tools` handling, quota handling, `onBoot` recovery and the Claude Code adapter. Nothing in section 11 is left unbuilt.
+- Real execution fails closed until the owner confirms the items in spec section 12: the Copilot tool-allowlist flag (item 1; execution is refused without it), the quota and credit-limit messages (item 3; `quota_error_patterns` is empty by default), the plan terms (item 5) and the Claude flags (every Claude entry is unverified, so Claude runs are refused). Session resume (item 2) is not used. Real analysis with Copilot is not blocked. Do not enable any of these by guessing a flag.
 
 | Package | Owns |
 |---|---|
@@ -57,7 +58,7 @@ Run `pnpm build`, `pnpm typecheck` and `pnpm test` before handing work over, and
 
 - The server binds to `127.0.0.1` only (`packages/server/src/config.ts`) and answers 403 to a foreign `Host` or `Origin` (`packages/server/src/app.ts`). Keep both.
 - Never commit secrets, tokens, `.env*` files, databases or `data/`.
-- Jira credentials come only from the environment: `JIRA_EMAIL` and `JIRA_API_TOKEN`. Never write them to the database, events, journal or logs.
+- Jira credentials come only from the environment: `JIRA_EMAIL` and `JIRA_API_TOKEN`. Never write them to the database, events, journal or logs. They are removed from the environment of every agent and git child process (`childEnv` in `packages/adapters/src/spawner.ts`).
 - The app never writes to Jira and never runs `git push`.
 - `--yolo` is never used or enabled (spec section 10).
 - Screenshots go in a PR description only. Never commit them.
