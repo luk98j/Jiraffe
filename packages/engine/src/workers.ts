@@ -4,6 +4,7 @@ import {
   finishRun,
   insertRun,
   listRuns,
+  listDueResumes,
   listUnprocessedEvents,
   markEventsProcessed,
   nextClaimCandidate,
@@ -13,7 +14,7 @@ import { selectRunner } from './agentRun.ts';
 import { write, type Ctx } from './context.ts';
 import { runExecution } from './execution.ts';
 import { getSetting } from './settings.ts';
-import { applyTransition } from './transition.ts';
+import { applyTransition, transition } from './transition.ts';
 import type { AnalysisRole } from './prompts.ts';
 
 export type RunKind = 'analysis' | 'execution';
@@ -163,6 +164,15 @@ export function createWorkers(ctx: Ctx): Workers {
 
     tick() {
       if (w.closed) return;
+      // Paused tasks whose resume time has passed go back to where they were; the claim then
+      // starts a fresh run for them within the slot limits.
+      for (const id of listDueResumes(ctx.db, ctx.clock().toISOString())) {
+        try {
+          transition(ctx, id, 'resume');
+        } catch (err) {
+          ctx.logger.error('resuming a paused task failed', err);
+        }
+      }
       const open = listUnprocessedEvents(ctx.db, 500);
       if (open.length === 0) return; // events are wake-up hints; settings changes pump on their own
       w.pump();

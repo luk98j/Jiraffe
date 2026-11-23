@@ -59,6 +59,7 @@ export const SETTINGS = {
   max_parallel_execution: def({ schema: posInt, default: 2, input: 'number' }),
   default_max_credits: def({ schema: z.number().positive(), default: 2.0, input: 'number' }),
   quota_retry_minutes: def({ schema: posInt, default: 60, input: 'number' }),
+  // Empty until the owner confirms the real usage-limit messages (spec section 12 item 3).
   quota_error_patterns: def({ schema: z.array(nonEmpty), default: [] as string[], input: 'json' }),
   jira_base_url: def({ schema: url, default: '', input: 'text' }),
   jira_projects: def({

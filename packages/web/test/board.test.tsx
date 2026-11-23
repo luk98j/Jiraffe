@@ -447,3 +447,39 @@ describe('Start queue (step 5, AC-10)', () => {
     expect(button).toBeDisabled();
   });
 });
+
+describe('paused tasks (step 7)', () => {
+  const paused = task({
+    id: 1,
+    status: 'paused_quota',
+    statusBeforePause: 'running',
+    pauseReason: 'Credit limit reached',
+    resumeAt: '2026-11-23T12:00:00.000Z',
+  });
+
+  it('shows why the task is paused and when it resumes, with an icon', async () => {
+    board([paused]);
+    const c = await card('LOC-0001');
+    expect(within(c).getByTestId('pause-reason')).toHaveTextContent(
+      'Credit limit reached · resumes 2026-11-23T12:00:00.000Z',
+    );
+  });
+
+  it.each([
+    ['Resume', 'resume'],
+    ['Cancel', 'cancel'],
+  ])('%s on a paused card sends the %s event (AC-69)', async (label, event) => {
+    const { user, calls } = board([paused], (req) =>
+      req.method === 'POST' && req.path === '/api/tasks/1/events' ? { body: {} } : undefined,
+    );
+    await user.click(within(await card('LOC-0001')).getByRole('button', { name: label }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/tasks/1/events')?.body).toEqual({ event }),
+    );
+  });
+
+  it('shows no pause line for other statuses', async () => {
+    board([task({ id: 2, status: 'running', pauseReason: 'stale' })]);
+    expect(within(await card('LOC-0002')).queryByTestId('pause-reason')).toBeNull();
+  });
+});

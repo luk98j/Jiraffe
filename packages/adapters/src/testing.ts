@@ -38,6 +38,10 @@ export interface StubScript {
    * app cannot see tool calls of a real `-p` run.
    */
   tryCommand?: string;
+  /** Simulates a CONFIRMED credit-limit signal of a real adapter (spec section 12 item 3 is open). */
+  creditLimit?: boolean;
+  /** Simulates a confirmed usage-limit reset time. */
+  quotaResetAt?: string;
 }
 
 export interface StubSpawner extends Spawner {
@@ -162,12 +166,22 @@ export class FakeRunner implements AgentRunner {
         ...(allowed ? {} : { exitCode: 1 }),
       };
     }
-    return runCommand(this.spawner, 'fake-agent', [], {
+    const s = this.current;
+    const handle = runCommand(this.spawner, 'fake-agent', [], {
       cwd,
       timeoutMs: options.timeoutMs,
       onOutput: options.onOutput,
       graceMs: 50,
     });
+    if (!s.creditLimit && !s.quotaResetAt) return handle;
+    return {
+      ...handle,
+      result: handle.result.then((o) => ({
+        ...o,
+        ...(s.creditLimit ? { creditLimitReached: true } : {}),
+        ...(s.quotaResetAt ? { quotaResetAt: s.quotaResetAt } : {}),
+      })),
+    };
   }
 }
 

@@ -252,3 +252,46 @@ describe('analysis runs keep secrets and free text out (AC-83, AC-31)', () => {
     expect(db).toContain('QUESTION_MARK'); // questions live in messages, by design
   });
 });
+
+describe('quota and recovery keep secrets and output text out (AC-83)', () => {
+  it('stores a fixed pause reason and no credential, and journals recovery without free text', async () => {
+    const fake = new FakeRunner({
+      creditLimit: true,
+      exitCode: 1,
+      lines: [{ stream: 'stderr', text: `limit hit QUOTA_OUTPUT_MARK ${TOKEN} ${EMAIL}` }],
+    });
+    engine = createEngine({
+      dbPath: join(dir, 't.db'),
+      version: 'test',
+      logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
+      runners: { copilot: fake },
+    });
+    engine.updateSetting('auto_analysis', true);
+    const t = engine.createLocalTask({ title: 'T', description: 'd', repoPath: '/repo/x' });
+    engine.transition(t.id, 'enqueue');
+    await engine.start();
+    await engine.idle();
+    const row = raw().prepare('SELECT status, pause_reason r FROM tasks WHERE id = ?').get(t.id);
+    expect(row).toEqual({ status: 'paused_quota', r: 'Credit limit reached' });
+
+    // A run killed with the previous process: recovered at the next boot.
+    const u = engine.createLocalTask({ title: 'U', description: 'd', repoPath: '/repo/x' });
+    for (const e of ['enqueue', 'analysis_started'] as const) engine.transition(u.id, e);
+    raw()
+      .prepare(
+        "INSERT INTO runs (task_id, kind, status, pid, started_at) VALUES (?, 'analysis', 'running', 1, 'x')",
+      )
+      .run(u.id);
+    engine.updateSetting('auto_analysis', false);
+    await engine.start();
+
+    const db = dumpDatabase();
+    for (const secret of [TOKEN, EMAIL]) {
+      expect(db, `db has ${secret}`).not.toContain(secret);
+      expect(JSON.stringify(logs)).not.toContain(secret);
+    }
+    const journal = JSON.stringify(engine.listJournal({ limit: 1000 }));
+    expect(journal).not.toContain('QUOTA_OUTPUT_MARK');
+    expect(journal).toContain('analysing to queued_analysis (recovery)');
+  });
+});

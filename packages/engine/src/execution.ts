@@ -7,7 +7,8 @@ import {
 } from '@jiraffe/adapters';
 import { finishRun, getTaskDto, listMessages, listWorktreeRuns, setRunWorktree } from '@jiraffe/db';
 import { failRun, runAgent, selectRunner } from './agentRun.ts';
-import { classify, failureText } from './classify.ts';
+import { failureText } from './classify.ts';
+import { classifyResult, pauseForLimit } from './quota.ts';
 import { buildContext } from './contextFile.ts';
 import { write, type Ctx } from './context.ts';
 import { analysisVerdicts } from './delegate.ts';
@@ -117,10 +118,12 @@ export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
   write(ctx, (tx, outbox) => {
     const now = ctx.clock().toISOString();
     const t = getTaskDto(tx, claim.taskId);
-    const reason = classify(res.outcome, !!res.aborted);
+    const reason = classifyResult(ctx, res);
     if (reason === 'cancelled' || !t || t.deletedAt || t.status !== 'running') {
       finishRun(tx, claim.runId, { endReason: 'cancelled', finishedAt: now });
       outbox.changed();
+    } else if (reason === 'quota' || reason === 'credit_limit') {
+      pauseForLimit(ctx, tx, outbox, claim, reason, res);
     } else if (reason === 'crashed') {
       const text = failureText(res.outcome, getSetting(ctx, 'run_timeout_minutes'));
       failRun(ctx, tx, outbox, claim, text, res);

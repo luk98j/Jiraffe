@@ -5,6 +5,7 @@ export * as schema from './schema.ts';
 export {
   getTaskDto,
   listDeletedTaskDtos,
+  listDueResumes,
   listTaskDtos,
   setDeletedAt,
   setRepoPath,
@@ -18,6 +19,7 @@ export {
 } from './events.ts';
 export {
   countOpenRuns,
+  crashUnfinishedRuns,
   finishRun,
   getRun,
   insertRun,

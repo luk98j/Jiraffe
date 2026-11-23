@@ -99,3 +99,14 @@ export function listWorktreeRuns(db: Db | Tx, taskId: number): RunRow[] {
     .orderBy(desc(runs.id))
     .all();
 }
+
+/** Boot recovery: every run still open belongs to a process that no longer exists. Sends no signal. */
+export function crashUnfinishedRuns(tx: Db | Tx, now: string): number {
+  const patch = {
+    status: 'finished' as const,
+    pid: null,
+    endReason: 'crashed' as const,
+    finishedAt: now,
+  };
+  return tx.update(runs).set(patch).where(isNull(runs.finishedAt)).run().changes;
+}

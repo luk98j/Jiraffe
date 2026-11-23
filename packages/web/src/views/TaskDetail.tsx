@@ -207,6 +207,12 @@ export function TaskDetail() {
       <p className="state">
         <span aria-hidden="true">{view.icon}</span> <span>{view.label}</span>
       </p>
+      {task.status === 'paused_quota' && task.pauseReason && (
+        <p className="pause-reason" data-testid="pause-reason">
+          <span aria-hidden="true">⏸</span> {task.pauseReason}
+          {task.resumeAt && ` · resumes ${task.resumeAt}`}
+        </p>
+      )}
       <RepoEditor key={task.repoPath ?? ''} task={task} />
       <p className="body">{task.body}</p>
       <Chat detail={q.data} />

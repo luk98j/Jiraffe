@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import type { Statement } from 'better-sqlite3';
 import type { TaskDto } from '@jiraffe/core';
 import type { Db, Tx } from './client.ts';
 import { tasks } from './schema.ts';
@@ -73,4 +74,19 @@ export function listDeletedTaskDtos(db: Db | Tx, since: string): TaskDto[] {
     .orderBy(asc(tasks.id))
     .all()
     .map((r) => toDto({ ...r.t, newComment: r.newComment }));
+}
+
+// Read by the poller every 1.5 s, so the statement is prepared once per connection.
+const due = new WeakMap<object, Statement<[string], { id: number }>>();
+
+/** Paused tasks whose resume time has passed. */
+export function listDueResumes(db: Db, now: string): number[] {
+  let stmt = due.get(db.$client);
+  if (!stmt) {
+    stmt = db.$client.prepare(
+      "SELECT id FROM tasks WHERE status = 'paused_quota' AND deleted_at IS NULL AND resume_at IS NOT NULL AND resume_at <= ? ORDER BY id",
+    );
+    due.set(db.$client, stmt);
+  }
+  return stmt.all(now).map((r) => r.id);
 }

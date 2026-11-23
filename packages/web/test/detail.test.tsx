@@ -385,3 +385,21 @@ describe('delegate, logs, diff, errors and delete (step 6)', () => {
     expect(screen.queryByLabelText('Also remove the worktree and branch')).toBeNull();
   });
 });
+
+describe('paused task detail (step 7)', () => {
+  it('shows the fixed pause reason and the resume time', async () => {
+    const { handler } = server({
+      task: task({
+        id: 1,
+        status: 'paused_quota',
+        pauseReason: 'Usage limit reached',
+        resumeAt: '2026-11-23T12:00:00.000Z',
+      }),
+      messages: [],
+    });
+    renderApp('/tasks/1', handler);
+    expect(await screen.findByTestId('pause-reason')).toHaveTextContent(
+      'Usage limit reached · resumes 2026-11-23T12:00:00.000Z',
+    );
+  });
+});

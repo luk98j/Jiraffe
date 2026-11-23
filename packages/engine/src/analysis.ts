@@ -10,7 +10,8 @@ import {
   type Tx,
 } from '@jiraffe/db';
 import { failRun as fail, runAgent, selectRunner, type AgentResult } from './agentRun.ts';
-import { classify, failureText } from './classify.ts';
+import { failureText } from './classify.ts';
+import { classifyResult, pauseForLimit } from './quota.ts';
 import { write, type Ctx, type Outbox } from './context.ts';
 import { buildAnalysisPrompt, type AnalysisRole } from './prompts.ts';
 import { getSetting } from './settings.ts';
@@ -115,12 +116,14 @@ function finish(
 ): Claim | null {
   const now = ctx.clock().toISOString();
   const task = getTaskDto(tx, claim.taskId);
-  const reason = classify(res.outcome, !!res.aborted);
+  const reason = classifyResult(ctx, res);
   if (reason === 'cancelled' || !task || task.deletedAt || task.status !== 'analysing') {
     finishRun(tx, claim.runId, { endReason: 'cancelled', finishedAt: now });
     outbox.changed();
     return null; // the result is discarded; whoever changed the task owns its status
   }
+  if (reason === 'quota' || reason === 'credit_limit')
+    return pauseForLimit(ctx, tx, outbox, claim, reason, res);
   if (reason === 'crashed') {
     const text = failureText(res.outcome, getSetting(ctx, 'run_timeout_minutes'));
     return fail(ctx, tx, outbox, claim, text, res);

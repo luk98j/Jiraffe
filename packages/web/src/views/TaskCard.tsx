@@ -121,6 +121,12 @@ export function TaskCard({ task, onEvent, onDelete, onDelegate }: Props) {
       </Link>
       <div className="card-title">{task.title}</div>
       <div className="card-repo">{task.repoPath ?? 'No repository'}</div>
+      {task.status === 'paused_quota' && task.pauseReason && (
+        <div className="pause-reason" data-testid="pause-reason">
+          <span aria-hidden="true">⏸</span> {task.pauseReason}
+          {task.resumeAt && ` · resumes ${task.resumeAt}`}
+        </div>
+      )}
       <div className="badges">
         {task.hasNewComment && <span className="badge badge-info">New comment</span>}
         {task.bodyChangedAfterAnalysis && (
