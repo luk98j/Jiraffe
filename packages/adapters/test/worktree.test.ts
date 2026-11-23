@@ -1,4 +1,14 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,6 +24,7 @@ import {
   removeWorktree,
   resolveWorktreePath,
   runCommand,
+  writeInside,
 } from '../src/index.ts';
 import { FakeGit, makeTempRepo } from '../src/testing.ts';
 
@@ -155,6 +166,36 @@ describe('ownership of the worktree and branch', () => {
       ok: true,
       created: false,
     });
+  });
+});
+
+describe('writeInside', () => {
+  const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'jiraffe-write-')));
+
+  it('writes and replaces a file, creating folders', () => {
+    const root = tmp();
+    expect(writeInside(root, '.orchestrator/context.md', 'one')).toEqual({ ok: true });
+    expect(writeInside(root, '.orchestrator/context.md', 'two')).toEqual({ ok: true });
+    expect(readFileSync(join(root, '.orchestrator/context.md'), 'utf8')).toBe('two');
+  });
+
+  it('refuses a symlink at the file, also a dangling one, and writes nothing through it', () => {
+    const root = tmp();
+    const outside = tmp();
+    mkdirSync(join(root, '.orchestrator'));
+    symlinkSync(join(outside, 'planted'), join(root, '.orchestrator/context.md')); // dangling
+    expect(writeInside(root, '.orchestrator/context.md', 'x')).toMatchObject({ ok: false });
+    expect(existsSync(join(outside, 'planted'))).toBe(false);
+    const target = join(outside, 'existing.txt');
+    writeFileSync(target, 'keep');
+    rmSync(join(root, '.orchestrator/context.md'));
+    symlinkSync(target, join(root, '.orchestrator/context.md'));
+    expect(writeInside(root, '.orchestrator/context.md', 'x')).toMatchObject({ ok: false });
+    expect(readFileSync(target, 'utf8')).toBe('keep');
+  });
+
+  it('refuses a path outside the root', () => {
+    expect(writeInside(tmp(), '../escape.txt', 'x')).toMatchObject({ ok: false });
   });
 });
 

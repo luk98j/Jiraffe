@@ -55,7 +55,7 @@ describe('parseVerdict', () => {
     ['summary wrong type', fence({ ...valid, summary: 5 })],
     ['permissions wrong type', fence({ ...valid, permissions: 'all' })],
     ['unclosed fence', '```json\n{"verdict":"READY"}'],
-    ['only a non-json fence', fence(valid, 'ts').replace('```ts', '```ts')],
+    ['only a non-json fence', fence(valid, 'ts')],
   ])('rejects %s', (_name, text) => {
     const r = parseVerdict(text);
     expect(r.ok).toBe(false);
@@ -67,6 +67,17 @@ describe('parseVerdict', () => {
     expect(parseVerdict(fence({ ...valid, questions: Array(101).fill('q') })).ok).toBe(false);
     expect(parseVerdict(fence({ ...valid, questions: ['q'.repeat(3000)] })).ok).toBe(false);
     expect(parseVerdict(fence({ ...valid, permissions: Array(201).fill('p') })).ok).toBe(false);
+  });
+
+  it('handles a very long run of blanks after a fence quickly (no regex backtracking)', () => {
+    const started = Date.now();
+    for (const text of [
+      `\`\`\`${'\t'.repeat(100_000)}`,
+      `\`\`\`${' \t'.repeat(100_000)}x`,
+      `\`\`\`json${'\t'.repeat(100_000)}\n${'```'.repeat(1000)}`,
+    ])
+      expect(parseVerdict(text).ok).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   it('never throws on hostile input', () => {

@@ -1,10 +1,13 @@
 import {
-  appendFileSync,
+  closeSync,
+  constants,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
   realpathSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import type { GitRunner } from './git.ts';
@@ -76,12 +79,32 @@ export async function ensureWorktree(
     : fail('git worktree add failed', r);
 }
 
-/** Writes a file inside the worktree only, creating folders. */
+/**
+ * Writes a file inside the worktree only, creating folders. The file is opened once with
+ * O_NOFOLLOW, so a symlink (also a dangling one) at the final component is refused instead of
+ * followed; there is no check before the write that could go stale.
+ */
 export function writeInside(root: string, rel: string, text: string): Done {
   const full = resolveInside(root, rel);
   if (!full) return { ok: false, error: `Path ${rel} is outside the worktree` };
   mkdirSync(dirname(full), { recursive: true });
-  writeFileSync(full, text);
+  try {
+    const fd = openSync(
+      full,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+      0o644,
+    );
+    try {
+      writeFileSync(fd, text);
+    } finally {
+      closeSync(fd);
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Cannot write ${rel}: ${(err as NodeJS.ErrnoException).code ?? 'error'}`,
+    };
+  }
   return { ok: true };
 }
 
@@ -93,9 +116,15 @@ export async function addInfoExclude(git: GitRunner, worktree: string): Promise<
   // The one explicit exception to "inside the worktree": git decides where this file lives.
   const file = isAbsolute(rel) ? rel : join(worktree, rel);
   mkdirSync(dirname(file), { recursive: true });
-  const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  if (!current.split('\n').includes('.orchestrator/'))
-    appendFileSync(file, `${current && !current.endsWith('\n') ? '\n' : ''}.orchestrator/\n`);
+  // One descriptor for read and append (created if missing): no existence check beforehand.
+  const fd = openSync(file, 'a+');
+  try {
+    const current = readFileSync(fd, 'utf8');
+    if (!current.split('\n').includes('.orchestrator/'))
+      writeSync(fd, `${current && !current.endsWith('\n') ? '\n' : ''}.orchestrator/\n`);
+  } finally {
+    closeSync(fd);
+  }
   return { ok: true };
 }
 
