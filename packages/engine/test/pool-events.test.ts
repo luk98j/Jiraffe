@@ -236,7 +236,7 @@ describe('cancel, delete and failures (AC-18, AC-19, AC-20)', () => {
   });
 });
 
-describe('execution (minimal, before worktrees)', () => {
+describe('execution with an adapter that cannot express the allowlist', () => {
   it('fails closed with the real Copilot profile: running then failed in one transaction, no spawn', async () => {
     const spawner = stubSpawner();
     const h = makeEngine({ runners: { copilot: createCopilotRunner(spawner) } });

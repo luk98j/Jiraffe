@@ -89,6 +89,7 @@ describe('migrations (AC-6, AC-7)', () => {
       'worktree_path',
       'branch',
       'base_commit',
+      'branch_created',
     ]);
     expect(cols('events')).toEqual([
       'id',
@@ -101,6 +102,15 @@ describe('migrations (AC-6, AC-7)', () => {
     expect(cols('journal')).toEqual(['id', 'at', 'task_key', 'status', 'action', 'detail']);
     expect(cols('ignored_jira_keys')).toEqual(['jira_key', 'deleted_at']);
     expect(cols('settings')).toEqual(['key', 'value_json']);
+  });
+
+  it('indexes the columns the claim, counts and log paging filter on', () => {
+    const idx = (table: string) =>
+      (raw(db).pragma(`index_list(${table})`) as { name: string }[]).map((i) => i.name);
+    expect(idx('runs')).toEqual(
+      expect.arrayContaining(['runs_task_kind_idx', 'runs_kind_finished_idx']),
+    );
+    expect(idx('events')).toContain('events_task_type_idx');
   });
 
   it('uses WAL mode and enforces foreign keys', () => {
@@ -178,7 +188,7 @@ describe('task constraints (AC-30)', () => {
   });
 });
 
-describe('runs, claims and events helpers (step 5)', () => {
+describe('runs, claims and events helpers', () => {
   const task = (
     status: string,
     over: { priority?: number; updatedAt?: string; deleted?: boolean } = {},

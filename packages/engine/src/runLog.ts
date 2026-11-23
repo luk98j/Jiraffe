@@ -26,7 +26,11 @@ export class RunLog {
   private stored = 0;
   private truncated = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
-  private tails = { stdout: '', stderr: '' };
+  // Bounded: parts are joined and cut only when they exceed twice the cap.
+  private tails = {
+    stdout: { parts: [] as string[], size: 0 },
+    stderr: { parts: [] as string[], size: 0 },
+  };
   private secrets = secrets();
 
   constructor(
@@ -44,8 +48,14 @@ export class RunLog {
 
   push(line: OutputLine): void {
     const text = this.redact(line.text);
-    const tail = `${this.tails[line.stream]}${text}\n`;
-    this.tails[line.stream] = tail.length > TAIL_CAP ? tail.slice(-TAIL_CAP) : tail;
+    const tail = this.tails[line.stream];
+    tail.parts.push(`${text}\n`);
+    tail.size += text.length + 1;
+    if (tail.size > 2 * TAIL_CAP) {
+      const kept = tail.parts.join('').slice(-TAIL_CAP);
+      tail.parts = [kept];
+      tail.size = kept.length;
+    }
     if (this.truncated) return;
     const size = Buffer.byteLength(text);
     if (this.stored + size > this.capBytes) {
@@ -66,11 +76,15 @@ export class RunLog {
   }
 
   stdoutTail(): string {
-    return this.tails.stdout;
+    return this.tailOf('stdout');
   }
 
   stderrTail(): string {
-    return this.tails.stderr;
+    return this.tailOf('stderr');
+  }
+
+  private tailOf(stream: 'stdout' | 'stderr'): string {
+    return this.tails[stream].parts.join('').slice(-TAIL_CAP);
   }
 
   flush(): void {
@@ -92,7 +106,7 @@ export class RunLog {
             processedAt: at,
           });
         }
-        outbox.changed();
+        outbox.log(this.taskId);
       });
     } catch (err) {
       this.ctx.logger.error('storing agent output failed', err);

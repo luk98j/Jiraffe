@@ -8,11 +8,15 @@ import {
   useApiMutation,
   useDiff,
   useLogs,
+  usePageVisible,
   useSettings,
 } from '../queries.ts';
 import { DELETE_CONFIRM } from './TaskCard.tsx';
 
 type Extras = Pick<TaskExtrasDto, 'delegate' | 'lastError' | 'restartsInWorktree' | 'hasWorktree'>;
+
+/** More lines than this make the page slow, so only the newest are shown. */
+const SHOWN_LOG_LINES = 500;
 
 const Err = ({ error }: { error: Error | null }) =>
   error && (
@@ -68,8 +72,10 @@ export function DelegatePanel({ task, extras }: { task: TaskDto; extras: Extras 
 }
 
 export function LogsPanel({ task }: { task: TaskDto }) {
-  const q = useLogs(task.id, true);
-  const lines = q.data?.lines ?? [];
+  const visible = usePageVisible();
+  const q = useLogs(task.id, visible && task.status !== 'new');
+  const all = q.data?.lines ?? [];
+  const lines = all.slice(-SHOWN_LOG_LINES);
   return (
     <section aria-label="Logs" className={lines.length === 0 ? 'empty-area' : 'logs'}>
       <h3>Logs</h3>
@@ -77,6 +83,11 @@ export function LogsPanel({ task }: { task: TaskDto }) {
         <p>Nothing here yet</p>
       ) : (
         <pre data-testid="log-lines">
+          {all.length > lines.length && (
+            <div className="warning">
+              Showing the last {SHOWN_LOG_LINES} of {all.length} lines
+            </div>
+          )}
           {lines.map((l) => (
             <div key={l.id} className={`log-${l.stream}`}>
               [{l.stream}] {l.text}
@@ -94,7 +105,7 @@ export function LogsPanel({ task }: { task: TaskDto }) {
 }
 
 export function DiffPanel({ task }: { task: TaskDto }) {
-  const q = useDiff(task.id, task.status === 'review');
+  const q = useDiff(task.id, task.updatedAt, task.status === 'review');
   return (
     <section aria-label="Diff" className={q.data ? 'diff' : 'empty-area'}>
       <h3>Diff</h3>

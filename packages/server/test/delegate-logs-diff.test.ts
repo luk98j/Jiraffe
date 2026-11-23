@@ -62,9 +62,11 @@ describe('logs (AC-49)', () => {
     const first = (await h.req('GET', `/api/tasks/${id}/logs?limit=2`)).body;
     expect(first.lines.map((l: { text: string }) => l.text)).toEqual(['one', 'two']);
     expect(first.truncated).toBe(false);
+    expect(first.hasMore).toBe(true);
     const next = (await h.req('GET', `/api/tasks/${id}/logs?after=${first.lines[1].id}`)).body;
     expect(next.lines.map((l: { text: string }) => l.text)).toEqual(['three']);
     expect(next.truncated).toBe(true);
+    expect(next.hasMore).toBe(false);
     for (const bad of ['after=-1', 'after=x', 'limit=0', 'limit=501', 'limit=1.5'])
       expect((await h.req('GET', `/api/tasks/${id}/logs?${bad}`)).status, bad).toBe(400);
   });

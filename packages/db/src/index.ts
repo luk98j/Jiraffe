@@ -16,6 +16,7 @@ export {
   listEventsAfter,
   listUnprocessedEvents,
   markEventsProcessed,
+  pollWork,
 } from './events.ts';
 export {
   countOpenRuns,
@@ -26,7 +27,6 @@ export {
   listRuns,
   listWorktreeRuns,
   setRunPid,
-  setRunResult,
   setRunWorktree,
   type RunEndReason,
   type RunKind,

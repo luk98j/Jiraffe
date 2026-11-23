@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import type {
   AnalysisDto,
   DiffDto,
@@ -86,14 +87,35 @@ export const deleteTaskWith = (id: number, removeWorktree: boolean) =>
     `/api/tasks/${id}${removeWorktree ? '?removeWorktree=1' : ''}`,
   );
 
-/** Every stored output line of the task, fetched in pages by event id. */
-export const useLogs = (id: number, enabled: boolean) =>
-  useQuery({
+interface LogsData {
+  lines: LogLineDto[];
+  truncated: boolean;
+}
+
+/** True while the browser tab is shown; hidden tabs do not poll logs. */
+export function usePageVisible(): boolean {
+  const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
+  useEffect(() => {
+    const on = () => setVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
+  return visible;
+}
+
+/**
+ * The stored output lines of the task. Each refetch asks only for lines after the last one
+ * already held and appends them, so a refresh costs one small request.
+ */
+export const useLogs = (id: number, enabled: boolean) => {
+  const qc = useQueryClient();
+  return useQuery({
     queryKey: ['logs', id],
     enabled,
-    queryFn: async () => {
-      const lines: LogLineDto[] = [];
-      let truncated = false;
+    queryFn: async (): Promise<LogsData> => {
+      const held = qc.getQueryData<LogsData>(['logs', id]);
+      const lines = [...(held?.lines ?? [])];
+      let truncated = held?.truncated ?? false;
       for (;;) {
         const after = lines.at(-1)?.id ?? 0;
         const page = await request<LogsDto>(
@@ -102,14 +124,17 @@ export const useLogs = (id: number, enabled: boolean) =>
         );
         lines.push(...page.lines);
         truncated ||= page.truncated;
-        if (page.lines.length < 500) return { lines, truncated };
+        if (!page.hasMore || page.lines.length === 0) return { lines, truncated };
       }
     },
   });
+};
 
-export const useDiff = (id: number, enabled: boolean) =>
+/** The diff is keyed by `updatedAt`: it is fetched again when the task changed, not on every refresh. */
+export const useDiff = (id: number, updatedAt: string, enabled: boolean) =>
   useQuery({
-    queryKey: ['diff', id],
+    queryKey: ['diff', id, updatedAt],
     enabled,
+    staleTime: Number.POSITIVE_INFINITY,
     queryFn: () => request<DiffDto>('GET', `/api/tasks/${id}/diff`),
   });

@@ -392,7 +392,7 @@ describe('robustness (AC-73)', () => {
   });
 });
 
-describe('Start queue (step 5, AC-10)', () => {
+describe('Start queue (AC-10)', () => {
   const queueState = (over: object = {}) => ({
     started: false,
     autoAnalysis: false,
@@ -448,7 +448,7 @@ describe('Start queue (step 5, AC-10)', () => {
   });
 });
 
-describe('paused tasks (step 7)', () => {
+describe('paused tasks', () => {
   const paused = task({
     id: 1,
     status: 'paused_quota',

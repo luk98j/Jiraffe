@@ -52,11 +52,6 @@ export function finishRun(
   tx.update(runs).set(patch).where(eq(runs.id, id)).run();
 }
 
-/** Stores the verdict of an open run without closing it. */
-export function setRunResult(tx: Db | Tx, id: number, resultJson: string): void {
-  tx.update(runs).set({ resultJson }).where(eq(runs.id, id)).run();
-}
-
 export function getRun(db: Db | Tx, id: number): RunRow | undefined {
   return db.select().from(runs).where(eq(runs.id, id)).get();
 }
@@ -85,7 +80,7 @@ export function listRuns(db: Db | Tx, taskId: number, kind?: RunKind): RunRow[] 
 export function setRunWorktree(
   tx: Db | Tx,
   id: number,
-  w: { worktreePath: string; branch: string; baseCommit: string },
+  w: { worktreePath: string; branch: string; baseCommit: string; branchCreated: boolean },
 ): void {
   tx.update(runs).set(w).where(eq(runs.id, id)).run();
 }

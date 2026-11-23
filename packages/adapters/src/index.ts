@@ -1,7 +1,7 @@
 export * from './runner.ts';
 export { childEnv, nodeSpawner, type ChildLike, type KillSignal, type Spawner } from './spawner.ts';
 export { runCommand } from './exec.ts';
-export { isConfirmed, type ProfileEntry } from './profile.ts';
+export type { ProfileEntry } from './profile.ts';
 export {
   buildCopilotArgs,
   copilotProfile,
@@ -10,9 +10,8 @@ export {
   type CopilotProfile,
 } from './copilot.ts';
 export { matchesAllowEntry, validateAllowedTools, type AllowlistCheck } from './allowlist.ts';
-export { realGit, type GitResult, type GitRunner } from './git.ts';
+export { gitEnv, realGit, type GitResult, type GitRunner } from './git.ts';
 export {
-  KEY_PATTERN,
   resolveInside,
   resolveWorktreePath,
   worktreesRoot,

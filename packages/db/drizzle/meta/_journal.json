@@ -15,6 +15,13 @@
       "when": 1795427161633,
       "tag": "0001_curly_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795429613186,
+      "tag": "0002_goofy_impossible_man",
+      "breakpoints": true
     }
   ]
 }

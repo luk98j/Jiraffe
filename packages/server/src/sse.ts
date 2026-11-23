@@ -4,7 +4,11 @@ import type { Engine } from '@jiraffe/engine';
 
 const PING_MS = 15_000;
 
-/** Server-sent events: one `change` message per committed change; the UI refetches. */
+/**
+ * Server-sent events: one `change` message per committed change (the UI refetches), and a
+ * separate `log` message with the task id when run output was stored (the UI refetches only
+ * that task's logs).
+ */
 export function registerSse(app: FastifyInstance, engine: Engine): void {
   const streams = new Map<ServerResponse, () => void>();
 
@@ -20,11 +24,15 @@ export function registerSse(app: FastifyInstance, engine: Engine): void {
     const off = engine.bus.onChanged(() => {
       res.write(`event: change\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
     });
+    const offLog = engine.bus.onLog(({ taskId }) => {
+      res.write(`event: log\ndata: ${JSON.stringify({ taskId })}\n\n`);
+    });
     const ping = setInterval(() => res.write(': ping\n\n'), PING_MS);
     ping.unref();
     const cleanup = () => {
       clearInterval(ping);
       off();
+      offLog();
       streams.delete(res);
     };
     streams.set(res, cleanup);

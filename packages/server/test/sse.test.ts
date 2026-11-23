@@ -63,6 +63,29 @@ describe('SSE stream (AC-69)', () => {
     await until(() => h.engine.bus.listenerCount('changed') === base);
   });
 
+  it('sends stored run output as a separate log event with the task id, not as a board change', async () => {
+    const h = makeApp();
+    await listen(h.app, { JIRAFFE_PORT: '0' });
+    const c = await connect((h.app.server.address() as AddressInfo).port);
+    await until(() => c.chunks.join('').includes('retry'));
+    h.engine.bus.emitLog(7);
+    await until(() => c.chunks.join('').includes('event: log'));
+    const text = c.chunks.join('');
+    expect(text).toContain('event: log\ndata: {"taskId":7}\n\n');
+    expect(text).not.toContain('event: change');
+    c.destroy();
+  });
+
+  it('removes the log listener when a client disconnects', async () => {
+    const h = makeApp();
+    await listen(h.app, { JIRAFFE_PORT: '0' });
+    const base = h.engine.bus.listenerCount('log');
+    const c = await connect((h.app.server.address() as AddressInfo).port);
+    await until(() => h.engine.bus.listenerCount('log') === base + 1);
+    c.destroy();
+    await until(() => h.engine.bus.listenerCount('log') === base);
+  });
+
   it('ends open streams when the server closes', async () => {
     const h = makeApp();
     await listen(h.app, { JIRAFFE_PORT: '0' });
@@ -71,5 +94,6 @@ describe('SSE stream (AC-69)', () => {
     await h.app.close();
     await c.closed;
     expect(h.engine.bus.listenerCount('changed')).toBe(0);
+    expect(h.engine.bus.listenerCount('log')).toBe(0);
   });
 });

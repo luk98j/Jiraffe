@@ -15,7 +15,7 @@ export interface Spawner {
   spawn(cmd: string, args: readonly string[], o: { cwd: string }): ChildLike;
 }
 
-/** Credentials the agent must never inherit (owner decision Q5). */
+/** Credentials no child process may inherit: the agent could read and print them. */
 const WITHHELD_ENV = ['JIRA_EMAIL', 'JIRA_API_TOKEN'];
 
 /** The environment of an agent child process: ours without the Jira credentials. */

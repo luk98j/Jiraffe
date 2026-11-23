@@ -18,6 +18,8 @@ import { canDelegate } from './delegate.ts';
 import { getSetting } from './settings.ts';
 
 const MAX_PAGE = 500;
+const MAX_PAGE_BYTES = 1024 * 1024;
+const STOP_WAIT_MS = 5000;
 
 /** The task's latest worktree, re-validated against the configured worktrees directory. */
 function worktreeOf(ctx: Ctx, taskId: number) {
@@ -31,7 +33,14 @@ function worktreeOf(ctx: Ctx, taskId: number) {
   const path = resolveInside(root, run.worktreePath);
   if (!path || path === root)
     throw new ConflictError('The worktree is outside the configured worktrees directory');
-  return { task, repo: task.repoPath, path, branch: run.branch, base: run.baseCommit };
+  return {
+    task,
+    repo: task.repoPath,
+    path,
+    branch: run.branch,
+    base: run.baseCommit,
+    created: run.branchCreated === true,
+  };
 }
 
 export async function getDiff(ctx: Ctx, taskId: number): Promise<DiffDto> {
@@ -42,30 +51,34 @@ export async function getDiff(ctx: Ctx, taskId: number): Promise<DiffDto> {
   return { diff: d.diff, truncated: d.truncated, base: w.base };
 }
 
-/** Output lines after an event id, oldest first. */
+/** Output lines after an event id, oldest first, at most MAX_PAGE lines and about MAX_PAGE_BYTES bytes. */
 export function getLogs(ctx: Ctx, taskId: number, after: number, limit: number): LogsDto {
   const task = getTaskDto(ctx.db, taskId);
   if (!task || task.deletedAt) throw new TaskNotFoundError();
-  const rows = listEventsAfter(
-    ctx.db,
-    taskId,
-    ['agent_output', 'log_truncated'],
-    after,
-    Math.min(Math.max(limit, 1), MAX_PAGE),
-  );
-  return {
-    truncated: rows.some((r) => r.type === 'log_truncated'),
-    lines: rows
-      .filter((r) => r.type === 'agent_output')
-      .map((r) => {
-        const p = JSON.parse(r.payloadJson ?? '{}') as {
-          runId: number;
-          stream: 'stdout' | 'stderr';
-          text: string;
-        };
-        return { id: r.id, runId: p.runId, stream: p.stream, text: p.text, at: r.createdAt };
-      }),
-  };
+  const max = Math.min(Math.max(limit, 1), MAX_PAGE);
+  const rows = listEventsAfter(ctx.db, taskId, ['agent_output', 'log_truncated'], after, max);
+  const lines: LogsDto['lines'] = [];
+  let truncated = false;
+  let bytes = 0;
+  let cut = false;
+  for (const r of rows) {
+    if (r.type === 'log_truncated') {
+      truncated = true;
+      continue;
+    }
+    const p = JSON.parse(r.payloadJson ?? '{}') as {
+      runId: number;
+      stream: 'stdout' | 'stderr';
+      text: string;
+    };
+    bytes += Buffer.byteLength(p.text);
+    if (lines.length > 0 && bytes > MAX_PAGE_BYTES) {
+      cut = true;
+      break;
+    }
+    lines.push({ id: r.id, runId: p.runId, stream: p.stream, text: p.text, at: r.createdAt });
+  }
+  return { lines, truncated, hasMore: cut || rows.length === max };
 }
 
 /**
@@ -82,6 +95,11 @@ export async function removeWorktreeAndBranch(ctx: Ctx, taskId: number): Promise
     return null; // nothing to remove
   }
   if (w.branch !== `task/${task.key}`) return 'The recorded branch does not belong to this task';
+  if (!w.created)
+    return 'The worktree and branch were not created by Jiraffe, so they were left in place';
+  // The delete already asked a live run to stop; give it a moment before removing its folder.
+  if (!(await ctx.workers.waitForTask(taskId, STOP_WAIT_MS)))
+    return 'The agent is still stopping, so the worktree was left in place. Remove it later';
   const rm = await removeWorktree(ctx.git, w.repo, w.path);
   if (!rm.ok) return rm.error;
   const br = await deleteBranch(ctx.git, w.repo, w.branch);

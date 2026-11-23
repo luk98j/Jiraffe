@@ -109,6 +109,8 @@ export interface LogsDto {
   lines: LogLineDto[];
   /** A `log_truncated` event exists in this page. */
   truncated: boolean;
+  /** More lines follow after the last one of this page. */
+  hasMore: boolean;
 }
 
 export interface DiffDto {

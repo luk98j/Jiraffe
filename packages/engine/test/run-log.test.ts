@@ -21,10 +21,12 @@ function setup(cap?: number) {
 const out = (text: string) => ({ stream: 'stdout' as const, text });
 
 describe('RunLog (AC-49, AC-50, AC-83)', () => {
-  it('batches lines: nothing for 250 ms, then one batch with a single change hint', () => {
+  it('batches lines: nothing for 250 ms, then one batch with a single log hint and no board change', () => {
     const { h, id, log } = setup();
     let changed = 0;
+    const logged: number[] = [];
     h.engine.bus.onChanged(() => changed++);
+    h.engine.bus.onLog((e) => logged.push(e.taskId));
     log.push(out('one'));
     log.push({ stream: 'stderr', text: 'two' });
     log.push(out('three'));
@@ -37,7 +39,8 @@ describe('RunLog (AC-49, AC-50, AC-83)', () => {
       { runId: 7, stream: 'stdout', text: 'three' },
     ]);
     expect(rows.every((r) => r.processed_at !== null)).toBe(true);
-    expect(changed).toBe(1);
+    expect(logged).toEqual([id]);
+    expect(changed).toBe(0); // a log flush must not refetch the whole board
   });
 
   it('flushes at 50 lines without waiting, and on close', () => {
@@ -72,6 +75,16 @@ describe('RunLog (AC-49, AC-50, AC-83)', () => {
     expect(stored).not.toContain('log.mark@example.test');
     expect(stored).toContain('[redacted]');
     expect(log.stdoutTail()).not.toContain('tok-LOGMARK-123');
+  });
+
+  it('keeps a bounded tail: the newest text, never more than 256 KiB', () => {
+    const { log } = setup();
+    for (let i = 0; i < 3000; i++) log.push(out(`${String(i).padStart(5, '0')}${'x'.repeat(250)}`));
+    const tail = log.stdoutTail();
+    expect(tail.length).toBeLessThanOrEqual(256 * 1024);
+    expect(tail.length).toBeGreaterThan(200 * 1024);
+    expect(tail.trimEnd().endsWith(`02999${'x'.repeat(250)}`)).toBe(true);
+    expect(tail).not.toContain(`00000${'x'.repeat(250)}`);
   });
 
   it('keeps log text out of the journal', () => {

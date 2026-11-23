@@ -92,7 +92,7 @@ describe('credit limit and quota end the run and pause the task (AC-62, 63, 66)'
     expect(runRows(h)[0]).toMatchObject({ end_reason: 'quota' });
   });
 
-  it('turns a credit limit during analysis into a quota event and keeps end_reason credit_limit (X5)', async () => {
+  it('turns a credit limit during analysis into a quota event and keeps end_reason credit_limit', async () => {
     const { h } = setup({ creditLimit: true, exitCode: 1 });
     h.engine.updateSetting('auto_analysis', true);
     const id = queuedTask(h.engine);

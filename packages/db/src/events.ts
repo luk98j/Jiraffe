@@ -72,3 +72,20 @@ export function latestEventOfType(db: Db | Tx, taskId: number, type: string) {
     .limit(1)
     .get();
 }
+
+const pending = new WeakMap<object, Statement<[string], { e: number; r: number }>>();
+
+/** One cheap read for the poller: is there anything to dispatch or to resume? */
+export function pollWork(db: Db, now: string): { events: boolean; resumes: boolean } {
+  let stmt = pending.get(db.$client);
+  if (!stmt) {
+    stmt = db.$client.prepare(
+      `SELECT EXISTS (SELECT 1 FROM events WHERE processed_at IS NULL) AS e,
+              EXISTS (SELECT 1 FROM tasks WHERE status = 'paused_quota' AND deleted_at IS NULL
+                      AND resume_at IS NOT NULL AND resume_at <= ?) AS r`,
+    );
+    pending.set(db.$client, stmt);
+  }
+  const row = stmt.get(now) as { e: number; r: number };
+  return { events: row.e === 1, resumes: row.r === 1 };
+}

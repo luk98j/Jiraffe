@@ -327,7 +327,7 @@ describe('sync (AC-43, AC-79)', () => {
   });
 });
 
-describe('queue and analysis (step 5)', () => {
+describe('queue and analysis', () => {
   it('reports the queue state and starts the queue without enqueueing anything', async () => {
     const h = makeApp();
     const t = await task(h);

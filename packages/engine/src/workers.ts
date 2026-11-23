@@ -7,7 +7,9 @@ import {
   listDueResumes,
   listUnprocessedEvents,
   markEventsProcessed,
+  pollWork,
   nextClaimCandidate,
+  type RunKind,
 } from '@jiraffe/db';
 import { runAnalysis } from './analysis.ts';
 import { selectRunner } from './agentRun.ts';
@@ -17,7 +19,6 @@ import { getSetting } from './settings.ts';
 import { applyTransition, transition } from './transition.ts';
 import type { AnalysisRole } from './prompts.ts';
 
-export type RunKind = 'analysis' | 'execution';
 export type AbortReason = 'cancelled' | 'deleted' | 'shutdown';
 
 /** A run whose slot is held. `maxCredits` is what `--max-ai-credits` gets. */
@@ -56,6 +57,8 @@ export interface Workers {
   abort(taskId: number, reason: AbortReason): void;
   /** Resolves when no run is live. */
   idle(): Promise<void>;
+  /** Waits until no run of the task is live, at most `ms`. Returns false on timeout. */
+  waitForTask(taskId: number, ms: number): Promise<boolean>;
   close(): void;
   queueState(): QueueState;
 }
@@ -164,16 +167,19 @@ export function createWorkers(ctx: Ctx): Workers {
 
     tick() {
       if (w.closed) return;
+      const now = ctx.clock().toISOString();
+      const work = pollWork(ctx.db, now); // one read; an idle tick does nothing else
+      if (!work.events && !work.resumes) return;
       // Paused tasks whose resume time has passed go back to where they were; the claim then
       // starts a fresh run for them within the slot limits.
-      for (const id of listDueResumes(ctx.db, ctx.clock().toISOString())) {
+      for (const id of work.resumes ? listDueResumes(ctx.db, now) : []) {
         try {
           transition(ctx, id, 'resume');
         } catch (err) {
           ctx.logger.error('resuming a paused task failed', err);
         }
       }
-      const open = listUnprocessedEvents(ctx.db, 500);
+      const open = work.events ? listUnprocessedEvents(ctx.db, 500) : [];
       if (open.length === 0) return; // events are wake-up hints; settings changes pump on their own
       w.pump();
       write(ctx, (tx) =>
@@ -187,6 +193,15 @@ export function createWorkers(ctx: Ctx): Workers {
 
     abort(taskId, reason) {
       for (const live of w.live.values()) if (live.taskId === taskId) live.abort(reason);
+    },
+
+    async waitForTask(taskId, ms) {
+      const end = Date.now() + ms;
+      while ([...w.live.values()].some((l) => l.taskId === taskId)) {
+        if (Date.now() > end) return false;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return true;
     },
 
     async idle() {

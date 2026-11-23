@@ -10,7 +10,3 @@ export interface ProfileEntry<A = undefined> {
   /** Present only for a confirmed entry that has to build arguments. */
   args?: A;
 }
-
-export function isConfirmed<A>(e: ProfileEntry<A>): boolean {
-  return e.status === 'confirmed';
-}

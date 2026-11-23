@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** Keys become a directory and a branch name, so only these characters are allowed. */
-export const KEY_PATTERN = /^[A-Za-z0-9_-]+$/;
+const KEY_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 /** realpath of the deepest existing ancestor, with the missing rest appended. */
 function realDeepest(p: string): string {

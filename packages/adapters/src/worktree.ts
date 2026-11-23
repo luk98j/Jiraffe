@@ -38,29 +38,42 @@ const samePath = (a: string, b: string) => {
 };
 
 /**
- * Creates the worktree on `branch`, or reuses what exists (a retry). Never forces,
- * never resets a branch, so earlier commits survive.
+ * Creates the worktree on a new `branch`, or reuses what an earlier run of this task created
+ * (`owned`, a retry). Never forces and never resets a branch, so earlier commits survive.
+ * A worktree or branch that already exists but was not created by Jiraffe is not touched:
+ * the call fails with a readable error instead.
  */
 export async function ensureWorktree(
   git: GitRunner,
   repo: string,
   path: string,
   branch: string,
-): Promise<Done> {
+  owned: boolean,
+): Promise<Done<{ created: boolean }>> {
   const list = await git.run(['worktree', 'list', '--porcelain'], { cwd: repo });
   if (list.code !== 0) return fail('Cannot list worktrees', list);
   const registered = list.stdout
     .split('\n')
     .filter((l) => l.startsWith('worktree '))
     .map((l) => l.slice(9));
-  if (registered.some((w) => samePath(w, path)) && existsSync(path)) return { ok: true };
+  if (registered.some((w) => samePath(w, path)) && existsSync(path))
+    return owned
+      ? { ok: true, created: false }
+      : { ok: false, error: `A worktree already exists at ${path} and was not created by Jiraffe` };
   const exists = await git.run(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], {
     cwd: repo,
   });
+  if (exists.code === 0 && !owned)
+    return {
+      ok: false,
+      error: `Branch ${branch} already exists and was not created by Jiraffe. Rename or delete it, then try again`,
+    };
   const args =
     exists.code === 0 ? ['worktree', 'add', path, branch] : ['worktree', 'add', path, '-b', branch];
   const r = await git.run(args, { cwd: repo });
-  return r.code === 0 ? { ok: true } : fail('git worktree add failed', r);
+  return r.code === 0
+    ? { ok: true, created: exists.code !== 0 }
+    : fail('git worktree add failed', r);
 }
 
 /** Writes a file inside the worktree only, creating folders. */
@@ -96,7 +109,10 @@ export async function diffSince(
   // Records new files without staging their content, so `git diff` shows them.
   const add = await git.run(['add', '--intent-to-add', '-A'], { cwd: worktree });
   if (add.code !== 0) return fail('git add failed', add);
-  const r = await git.run(['diff', base], { cwd: worktree, maxBytes: DIFF_CAP });
+  const r = await git.run(['diff', '--no-ext-diff', '--no-textconv', base], {
+    cwd: worktree,
+    maxBytes: DIFF_CAP,
+  });
   if (r.code !== 0) return fail('git diff failed', r);
   return {
     ok: true,

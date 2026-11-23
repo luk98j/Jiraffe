@@ -16,6 +16,9 @@ import { getSetting } from './settings.ts';
 import { applyTransition } from './transition.ts';
 import type { Claim } from './workers.ts';
 
+/** Always the first thing the agent sees, so task text can never become the first command-line token. */
+const PROMPT_PREFIX = 'Task instructions follow.\n\n';
+
 export const CONTEXT_FILE = '.orchestrator/context.md';
 
 const isActive = (s: string) => s === 'delegated' || s === 'running';
@@ -24,7 +27,7 @@ const isActive = (s: string) => s === 'delegated' || s === 'running';
  * Execution for a claimed `delegated` task (or a resumed `running` one):
  * worktree, context file, then the agent inside the worktree, then review.
  * Every failure before the agent starts ends the run and the task in ONE transaction
- * that first applies `execution_started`, so the task is never visible as running (X1).
+ * that first applies `execution_started`, so the task is never visible as running.
  */
 export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
   const cancel = () =>
@@ -68,8 +71,19 @@ export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
     if (!head.ok) return failEarly(head.error);
     base = head.commit;
   }
-  const made = await ensureWorktree(ctx.git, repo, wt.path, branch);
+  // Ownership is inherited: a retry may reuse what an earlier run of this task created.
+  const owned = listWorktreeRuns(ctx.db, task.id).some((r) => r.branchCreated === true);
+  const made = await ensureWorktree(ctx.git, repo, wt.path, branch, owned);
   if (!made.ok) return failEarly(made.error);
+  // Recorded at once, so a failure further down still leaves the run knowing what exists.
+  write(ctx, (tx) =>
+    setRunWorktree(tx, claim.runId, {
+      worktreePath: wt.path,
+      branch,
+      baseCommit: base as string,
+      branchCreated: owned || made.created,
+    }),
+  );
 
   const context = buildContext({
     key: task.key,
@@ -83,7 +97,7 @@ export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
   if (!excluded.ok) return failEarly(excluded.error);
   if (ctx.workers.closed) return;
 
-  // The worktree exists: record it on the run, then start the task.
+  // The worktree exists and is recorded on the run: start the task.
   const started = write(ctx, (tx, outbox) => {
     const t = getTaskDto(tx, claim.taskId);
     if (!t || t.deletedAt || !isActive(t.status)) {
@@ -91,11 +105,6 @@ export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
       outbox.changed();
       return false;
     }
-    setRunWorktree(tx, claim.runId, {
-      worktreePath: wt.path,
-      branch,
-      baseCommit: base as string,
-    });
     if (t.status === 'delegated') applyTransition(ctx, tx, outbox, t.id, 'execution_started');
     return true;
   });
@@ -108,10 +117,12 @@ export async function runExecution(ctx: Ctx, claim: Claim): Promise<void> {
     context,
   };
   // One pass with a function replacer: task text is never re-scanned for placeholders.
-  const prompt = getSetting(ctx, 'execution_prompt_template').replace(
-    /\{\{(\w+)\}\}/g,
-    (_m, k: string) => values[k] ?? '',
-  );
+  const prompt =
+    PROMPT_PREFIX +
+    getSetting(ctx, 'execution_prompt_template').replace(
+      /\{\{(\w+)\}\}/g,
+      (_m, k: string) => values[k] ?? '',
+    );
   const res = await runAgent(ctx, claim, { prompt, cwd: wt.path, allowedTools });
   if (ctx.workers.closed) return;
 

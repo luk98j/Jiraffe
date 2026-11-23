@@ -1,5 +1,5 @@
-import { finishRun, type Tx } from '@jiraffe/db';
-import { classify, resolveResumeAt, type EndReason } from './classify.ts';
+import { finishRun, type RunEndReason, type Tx } from '@jiraffe/db';
+import { classify, resolveResumeAt } from './classify.ts';
 import type { AgentResult } from './agentRun.ts';
 import type { Ctx, Outbox } from './context.ts';
 import { getSetting } from './settings.ts';
@@ -10,7 +10,7 @@ import type { Claim } from './workers.ts';
 const REASON = { quota: 'Usage limit reached', credit_limit: 'Credit limit reached' } as const;
 
 /** Classification with the configured patterns, over the redacted output tails. */
-export function classifyResult(ctx: Ctx, res: AgentResult): EndReason {
+export function classifyResult(ctx: Ctx, res: AgentResult): RunEndReason {
   return classify(res.outcome, !!res.aborted, {
     patterns: getSetting(ctx, 'quota_error_patterns'),
     output: `${res.stderr}\n${res.stdout}`,

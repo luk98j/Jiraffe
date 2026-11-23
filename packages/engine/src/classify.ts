@@ -1,6 +1,5 @@
 import type { RunOutcome } from '@jiraffe/adapters';
-
-export type EndReason = 'completed' | 'crashed' | 'cancelled' | 'quota' | 'credit_limit';
+import type { RunEndReason } from '@jiraffe/db';
 
 /**
  * Exit codes that mean "usage limit". Empty on purpose: the real code is unknown until the
@@ -18,7 +17,7 @@ export function classify(
   o: RunOutcome,
   aborted: boolean,
   { patterns, output }: { patterns: readonly string[]; output: string },
-): EndReason {
+): RunEndReason {
   if (aborted || o.cancelled) return 'cancelled';
   if (o.timedOut || o.spawnError !== undefined) return 'crashed';
   if (o.creditLimitReached) return 'credit_limit';

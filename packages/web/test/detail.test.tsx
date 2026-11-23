@@ -163,7 +163,7 @@ describe('chat (AC-68)', () => {
   });
 });
 
-describe('analysis result and waiting messages (step 5)', () => {
+describe('analysis result and waiting messages', () => {
   const run = (over: Partial<AnalysisDto['runs'][number]>): AnalysisDto['runs'][number] => ({
     runId: 1,
     role: 'analyst',
@@ -250,7 +250,7 @@ describe('analysis result and waiting messages (step 5)', () => {
   });
 });
 
-describe('delegate, logs, diff, errors and delete (step 6)', () => {
+describe('delegate, logs, diff, errors and delete', () => {
   const line = (id: number, text: string, stream: 'stdout' | 'stderr' = 'stdout') => ({
     id,
     runId: 1,
@@ -314,7 +314,13 @@ describe('delegate, logs, diff, errors and delete (step 6)', () => {
       '/tasks/1',
       withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
         req.path === '/api/tasks/1/logs'
-          ? { body: { lines: [line(1, 'hello'), line(2, 'oops', 'stderr')], truncated: true } }
+          ? {
+              body: {
+                lines: [line(1, 'hello'), line(2, 'oops', 'stderr')],
+                truncated: true,
+                hasMore: false,
+              },
+            }
           : undefined,
       ),
     );
@@ -323,6 +329,88 @@ describe('delegate, logs, diff, errors and delete (step 6)', () => {
     expect(within(region).getByText('[stderr] oops')).toBeInTheDocument();
     expect(within(region).getByText(/Log storage stopped at 5 MiB/)).toBeInTheDocument();
     expect(calls.find((c) => c.path.endsWith('/logs'))?.query.get('after')).toBe('0');
+  });
+
+  it('fetches only the new lines when the logs refresh, and follows hasMore across pages', async () => {
+    const all = [line(1, 'one'), line(2, 'two'), line(3, 'three')];
+    const { queryClient, calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) => {
+        if (req.path !== '/api/tasks/1/logs') return undefined;
+        const after = Number(req.query.get('after'));
+        const rest = all.filter((l) => l.id > after);
+        const page = after === 0 ? rest.slice(0, 1) : rest;
+        return { body: { lines: page, truncated: false, hasMore: after === 0 && rest.length > 1 } };
+      }),
+    );
+    await screen.findByText('[stdout] three');
+    expect(calls.filter((c) => c.path.endsWith('/logs')).map((c) => c.query.get('after'))).toEqual([
+      '0',
+      '1',
+    ]);
+    all.push(line(4, 'four'));
+    await queryClient.invalidateQueries({ queryKey: ['logs', 1] });
+    await screen.findByText('[stdout] four');
+    const afters = calls.filter((c) => c.path.endsWith('/logs')).map((c) => c.query.get('after'));
+    expect(afters.at(-1)).toBe('3');
+    expect(screen.getAllByText(/\[stdout\]/)).toHaveLength(4);
+  });
+
+  it('does not poll logs while the browser tab is hidden, and fetches when it is shown', async () => {
+    const state = { visible: 'hidden' };
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => state.visible,
+    });
+    try {
+      const { calls } = renderApp(
+        '/tasks/1',
+        withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
+          req.path === '/api/tasks/1/logs'
+            ? { body: { lines: [line(1, 'late')], truncated: false, hasMore: false } }
+            : undefined,
+        ),
+      );
+      await screen.findByRole('region', { name: 'Logs' });
+      expect(calls.some((c) => c.path.endsWith('/logs'))).toBe(false);
+      state.visible = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(await screen.findByText('[stdout] late')).toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
+  it('shows only the newest 500 lines and says so', async () => {
+    const many = Array.from({ length: 520 }, (_, i) => line(i + 1, `l${i + 1}`));
+    renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
+        req.path === '/api/tasks/1/logs'
+          ? { body: { lines: many, truncated: false, hasMore: false } }
+          : undefined,
+      ),
+    );
+    expect(await screen.findByText('Showing the last 500 of 520 lines')).toBeInTheDocument();
+    expect(screen.getAllByText(/\[stdout\]/)).toHaveLength(500);
+    expect(screen.queryByText('[stdout] l20')).toBeNull();
+  });
+
+  it('does not refetch the diff on a board-wide refresh', async () => {
+    const { queryClient, calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'review' }), messages: [] }, (req) =>
+        req.path === '/api/tasks/1/diff'
+          ? { body: { diff: '+x', truncated: false, base: 'abc' } }
+          : undefined,
+      ),
+    );
+    await screen.findByText('+x');
+    await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'diff' });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/tasks/1').length).toBeGreaterThan(1),
+    );
+    expect(calls.filter((c) => c.path === '/api/tasks/1/diff')).toHaveLength(1);
   });
 
   it('shows the diff with a truncation note, and Accept sends review_accepted', async () => {
@@ -386,7 +474,7 @@ describe('delegate, logs, diff, errors and delete (step 6)', () => {
   });
 });
 
-describe('paused task detail (step 7)', () => {
+describe('paused task detail', () => {
   it('shows the fixed pause reason and the resume time', async () => {
     const { handler } = server({
       task: task({

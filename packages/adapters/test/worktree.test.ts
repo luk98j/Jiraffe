@@ -33,26 +33,32 @@ describe('worktree against a real repository (AC-41, AC-44, AC-46, AC-51, AC-52)
     const r = setup();
     const head = await headCommit(realGit, r.path);
     expect(head).toMatchObject({ ok: true });
-    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch)).toEqual({ ok: true });
+    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch, false)).toEqual({
+      ok: true,
+      created: true,
+    });
     expect(existsSync(join(r.wt, 'a.txt'))).toBe(true);
     expect(r.git('branch', '--list', r.branch)).toContain(r.branch);
   });
 
   it('reuses an existing worktree and keeps its commits (AC-44)', async () => {
     const r = setup();
-    await ensureWorktree(realGit, r.path, r.wt, r.branch);
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, true);
     writeFileSync(join(r.wt, 'b.txt'), 'work\n');
     const inWt = (...a: string[]) =>
       realGit.run(['-c', 'user.name=T', '-c', 'user.email=t@example.test', ...a], { cwd: r.wt });
     await inWt('add', '-A');
     await inWt('commit', '-q', '-m', 'work');
-    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch)).toEqual({ ok: true });
+    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch, true)).toEqual({
+      ok: true,
+      created: false,
+    });
     expect(existsSync(join(r.wt, 'b.txt'))).toBe(true);
   });
 
   it('attaches to an existing branch whose worktree was removed, without -b or reset', async () => {
     const r = setup();
-    await ensureWorktree(realGit, r.path, r.wt, r.branch);
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, true);
     writeFileSync(join(r.wt, 'c.txt'), 'x\n');
     await realGit.run(['add', '-A'], { cwd: r.wt });
     await realGit.run(
@@ -60,19 +66,22 @@ describe('worktree against a real repository (AC-41, AC-44, AC-46, AC-51, AC-52)
       { cwd: r.wt },
     );
     expect(await removeWorktree(realGit, r.path, r.wt)).toEqual({ ok: true });
-    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch)).toEqual({ ok: true });
+    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch, true)).toEqual({
+      ok: true,
+      created: false,
+    });
     expect(existsSync(join(r.wt, 'c.txt'))).toBe(true);
   });
 
   it('reports the git error tail when the repository is not a repository', async () => {
     const r = setup();
-    const res = await ensureWorktree(realGit, join(r.path, 'nope'), r.wt, r.branch);
+    const res = await ensureWorktree(realGit, join(r.path, 'nope'), r.wt, r.branch, true);
     expect(res).toMatchObject({ ok: false, error: expect.stringContaining('git') });
   });
 
   it('writes .orchestrator/ to the exclude file git reports, also in a linked worktree', async () => {
     const r = setup();
-    await ensureWorktree(realGit, r.path, r.wt, r.branch);
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, true);
     expect(await addInfoExclude(realGit, r.wt)).toEqual({ ok: true });
     await addInfoExclude(realGit, r.wt); // twice: still one line
     const file = (
@@ -90,7 +99,7 @@ describe('worktree against a real repository (AC-41, AC-44, AC-46, AC-51, AC-52)
   it('diffs committed, uncommitted and new files against the base', async () => {
     const r = setup();
     const base = (await headCommit(realGit, r.path)) as { commit: string };
-    await ensureWorktree(realGit, r.path, r.wt, r.branch);
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, true);
     writeFileSync(join(r.wt, 'a.txt'), 'one\nchanged\n');
     writeFileSync(join(r.wt, 'new.txt'), 'brand new\n');
     const d = await diffSince(realGit, r.wt, base.commit);
@@ -109,11 +118,43 @@ describe('worktree against a real repository (AC-41, AC-44, AC-46, AC-51, AC-52)
 
   it('removes the worktree and deletes the branch', async () => {
     const r = setup();
-    await ensureWorktree(realGit, r.path, r.wt, r.branch);
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, true);
     expect(await removeWorktree(realGit, r.path, r.wt)).toEqual({ ok: true });
     expect(existsSync(r.wt)).toBe(false);
     expect(await deleteBranch(realGit, r.path, r.branch)).toEqual({ ok: true });
     expect(r.git('branch', '--list', r.branch).trim()).toBe('');
+  });
+});
+
+describe('ownership of the worktree and branch', () => {
+  it('refuses to take over a branch that Jiraffe did not create, and creates nothing', async () => {
+    const r = setup();
+    r.git('branch', r.branch); // someone else's branch with the same name
+    const res = await ensureWorktree(realGit, r.path, r.wt, r.branch, false);
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('was not created by Jiraffe'),
+    });
+    expect(existsSync(r.wt)).toBe(false);
+  });
+
+  it('refuses a worktree that already exists but is not owned', async () => {
+    const r = setup();
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, false);
+    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch, false)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('not created by Jiraffe'),
+    });
+  });
+
+  it('reuses an owned branch without creating it again', async () => {
+    const r = setup();
+    await ensureWorktree(realGit, r.path, r.wt, r.branch, false);
+    await removeWorktree(realGit, r.path, r.wt);
+    expect(await ensureWorktree(realGit, r.path, r.wt, r.branch, true)).toEqual({
+      ok: true,
+      created: false,
+    });
   });
 });
 
@@ -132,7 +173,7 @@ describe('diff cap (AC-52)', () => {
 describe('git calls are argument arrays (AC-43)', () => {
   it('passes the branch and path as separate arguments', async () => {
     const git = new FakeGit((args) => (args[0] === 'rev-parse' ? { code: 1 } : {}));
-    await ensureWorktree(git, '/repo', '/w/KEY-1', 'task/KEY-1');
+    await ensureWorktree(git, '/repo', '/w/KEY-1', 'task/KEY-1', false);
     expect(git.calls.map((c) => c.args)).toContainEqual([
       'worktree',
       'add',
@@ -144,7 +185,7 @@ describe('git calls are argument arrays (AC-43)', () => {
   });
 });
 
-describe('child environment (owner decision Q5)', () => {
+describe('child environment', () => {
   it('drops the Jira credentials and keeps the rest', () => {
     const env = childEnv({ JIRA_EMAIL: 'a@b', JIRA_API_TOKEN: 't', PATH: '/bin', HOME: '/h' });
     expect(env).toEqual({ PATH: '/bin', HOME: '/h' });

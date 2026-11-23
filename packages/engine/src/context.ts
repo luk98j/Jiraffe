@@ -23,6 +23,7 @@ export interface Ctx {
 export class Outbox {
   private events: DomainEvent[] = [];
   private dirty = false;
+  private logged = new Set<number>();
 
   emitEvent(e: DomainEvent): void {
     this.events.push(e);
@@ -32,8 +33,14 @@ export class Outbox {
     this.dirty = true;
   }
 
+  /** Output was stored for this task; sent as the `log` topic, not as a board-wide change. */
+  log(taskId: number): void {
+    this.logged.add(taskId);
+  }
+
   flush(bus: Bus): void {
     for (const e of this.events) bus.emitEvent(e);
+    for (const id of this.logged) bus.emitLog(id);
     if (this.dirty) bus.emitChanged();
   }
 }

@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { realGit } from '@jiraffe/adapters';
 import { FakeGit, FakeRunner, gitSync } from '@jiraffe/adapters/testing';
 import { ConflictError } from '@jiraffe/core';
@@ -60,6 +60,32 @@ describe('delete with worktree (AC-55)', () => {
     rmSync(join(repo.worktrees, 'LOC-0001', '.git'), { recursive: true, force: true });
     const err = await h.engine.removeWorktreeAndBranch(a);
     expect(err).toEqual(expect.stringContaining('git'));
+  });
+
+  it('leaves a worktree and branch alone when Jiraffe did not create them', async () => {
+    const { h, repo, a, branches } = await twoFinishedTasks();
+    h.raw.prepare('UPDATE runs SET branch_created = 0 WHERE task_id = ?').run(a);
+    h.engine.deleteTask(a);
+    expect(await h.engine.removeWorktreeAndBranch(a)).toMatch(/not created by Jiraffe/);
+    expect(existsSync(join(repo.worktrees, 'LOC-0001'))).toBe(true);
+    expect(branches()).toContain('task/LOC-0001');
+  });
+
+  it('does not remove the worktree while the run is still stopping', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    try {
+      const { h, repo, a } = await twoFinishedTasks();
+      h.engine.deleteTask(a);
+      h.engine.ctx.workers.live.set(999, { taskId: a, abort() {} });
+      const pending = h.engine.removeWorktreeAndBranch(a);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(await pending).toMatch(/still stopping/);
+      expect(existsSync(join(repo.worktrees, 'LOC-0001'))).toBe(true);
+      h.engine.ctx.workers.live.delete(999);
+      expect(await h.engine.removeWorktreeAndBranch(a)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does nothing for a task that never had a worktree', async () => {

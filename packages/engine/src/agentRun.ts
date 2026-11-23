@@ -1,5 +1,5 @@
 import type { AgentRunner, RunOutcome } from '@jiraffe/adapters';
-import { finishRun, getRun, insertEvent, setRunPid, type Tx } from '@jiraffe/db';
+import { finishRun, insertEvent, setRunPid, type Tx } from '@jiraffe/db';
 import { write, type Ctx, type Outbox } from './context.ts';
 import { RunLog } from './runLog.ts';
 import { getSetting } from './settings.ts';
@@ -52,7 +52,7 @@ export async function runAgent(
     else {
       try {
         const handle = runner.start(input.prompt, input.cwd, {
-          maxCredits: getRun(ctx.db, claim.runId)?.maxCredits ?? claim.maxCredits,
+          maxCredits: claim.maxCredits,
           timeoutMs: getSetting(ctx, 'run_timeout_minutes') * 60_000,
           onOutput: (l) => log.push(l),
           ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),

@@ -158,7 +158,7 @@ describe('worktree, context and review (AC-41, 46, 47, 48, 51)', () => {
   });
 });
 
-describe('failures before the agent starts (AC-45, X1)', () => {
+describe('failures before the agent starts (AC-45)', () => {
   async function failing(prepare: (h: ReturnType<typeof setup>) => void) {
     const s = setup();
     prepare(s);
@@ -206,6 +206,63 @@ describe('failures before the agent starts (AC-45, X1)', () => {
       writeFileSync(join(dir, 'f'), '1');
     });
     expectFailed(s, /worktree add failed/);
+  });
+});
+
+describe('prompt and branch ownership', () => {
+  it('starts the prompt with a fixed prefix, even when the template starts with task text', async () => {
+    const { fake, h, id } = setup();
+    h.engine.updateSetting('execution_prompt_template', '{{body}}\n{{context}}');
+    h.raw.prepare('UPDATE tasks SET body = ? WHERE id = ?').run('--dangerous-looking body', id);
+    await run(h, id);
+    const prompt = fake.calls[0]!.prompt;
+    expect(prompt.startsWith('Task instructions follow.')).toBe(true);
+    expect(prompt).toContain('--dangerous-looking body');
+    expect(prompt.startsWith('-')).toBe(false);
+  });
+
+  it('records that Jiraffe created the branch', async () => {
+    const { h, id } = setup();
+    await run(h, id);
+    expect(h.raw.prepare('SELECT branch_created b FROM runs').get()).toEqual({ b: 1 });
+  });
+
+  it('fails with a clear error instead of taking over a branch Jiraffe did not create', async () => {
+    const { fake, h, repo, id } = setup();
+    repo.git('branch', 'task/LOC-0001');
+    const head = repo.git('rev-parse', 'task/LOC-0001');
+    await run(h, id);
+    expect(statusOf(h, id)).toBe('failed');
+    expect(fake.calls).toEqual([]);
+    expect(h.engine.getTaskDetail(id).lastError?.message).toMatch(
+      /task\/LOC-0001 already exists and was not created by Jiraffe/,
+    );
+    expect(repo.git('rev-parse', 'task/LOC-0001')).toBe(head);
+    expect(existsSync(join(repo.worktrees, 'LOC-0001'))).toBe(false);
+  });
+
+  it('keeps the ownership record when a later step fails, so the retry reuses the branch', async () => {
+    let breakExclude = true;
+    const git = {
+      run: (args: readonly string[], o: { cwd: string; maxBytes?: number }) =>
+        breakExclude && args[0] === 'rev-parse' && args[1] === '--git-path'
+          ? Promise.resolve({ code: 1, stdout: '', stderr: 'exclude broke', truncated: false })
+          : realGit.run(args, o),
+    };
+    const { h, id } = setup({}, { git });
+    await run(h, id);
+    expect(statusOf(h, id)).toBe('failed');
+    expect(h.raw.prepare('SELECT branch_created b FROM runs').get()).toEqual({ b: 1 });
+
+    breakExclude = false;
+    h.raw.prepare("UPDATE tasks SET status = 'delegated' WHERE id = ?").run(id);
+    h.engine.ctx.workers.pump();
+    await h.engine.idle();
+    expect(statusOf(h, id)).toBe('review');
+    expect(h.raw.prepare('SELECT branch_created b FROM runs ORDER BY id').all()).toEqual([
+      { b: 1 },
+      { b: 1 },
+    ]);
   });
 });
 
@@ -295,7 +352,21 @@ describe('logs (AC-49, AC-50)', () => {
     expect(statusOf(h, id)).toBe('review');
     expect(eventRows(h, 'agent_output', id)).toHaveLength(5);
     expect(eventRows(h, 'log_truncated', id)).toHaveLength(1);
-    expect(h.engine.getLogs(id, 0, 500).truncated).toBe(true);
+    // The response is capped at about 1 MiB, so the lines come in several pages.
+    let after = 0;
+    let lines = 0;
+    let pages = 0;
+    let truncated = false;
+    for (;;) {
+      const p = h.engine.getLogs(id, after, 500);
+      pages++;
+      lines += p.lines.length;
+      truncated ||= p.truncated;
+      if (!p.hasMore) break;
+      after = p.lines.at(-1)!.id;
+    }
+    expect([lines, truncated]).toEqual([5, true]);
+    expect(pages).toBeGreaterThan(1);
   });
 });
 

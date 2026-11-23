@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { childEnv } from './spawner.ts';
 
 export interface GitResult {
   code: number | null;
@@ -11,6 +12,19 @@ export interface GitResult {
 /** Every git call goes through this interface: argument arrays only, never a shell string. */
 export interface GitRunner {
   run(args: readonly string[], o: { cwd: string; maxBytes?: number }): Promise<GitResult>;
+}
+
+/**
+ * Git runs in repositories an agent may have written to, so config in `.git` is not trusted.
+ * The program-launching settings that every subcommand used here reads are turned off.
+ */
+const SAFE_CONFIG = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null'];
+
+/** No Jira credentials, no inherited GIT_* variables, no system config, never a prompt. */
+export function gitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out = childEnv(env);
+  for (const k of Object.keys(out)) if (k.startsWith('GIT_')) delete out[k];
+  return { ...out, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' };
 }
 
 const DEFAULT_MAX_BYTES = 1024 * 1024;
@@ -32,9 +46,9 @@ export const realGit: GitRunner = {
       };
       let child: ReturnType<typeof spawn>;
       try {
-        child = spawn('git', [...args], {
+        child = spawn('git', [...SAFE_CONFIG, ...args], {
           cwd: o.cwd,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+          env: gitEnv(),
           stdio: ['ignore', 'pipe', 'pipe'],
         });
       } catch (err) {
