@@ -107,6 +107,14 @@ export function registerRoutes(app: FastifyInstance, engine: Engine): void {
     return engine.readSettings();
   });
 
+  app.get('/api/queue', async () => engine.queueState());
+
+  // "Start queue": lets workers start queued analyses for this session. It enqueues nothing.
+  app.post('/api/queue/start', async () => {
+    engine.startQueue();
+    return { started: true };
+  });
+
   app.get('/api/sync', async () => engine.syncState());
 
   app.post('/api/sync', async () => engine.runTaskSync());

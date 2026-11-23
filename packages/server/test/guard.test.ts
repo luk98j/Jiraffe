@@ -65,6 +65,19 @@ describe('Host and Origin guard (B-SEC-1)', () => {
     },
   );
 
+  it('guards the queue routes too', async () => {
+    const h = makeApp();
+    for (const [method, url] of [
+      ['GET', '/api/queue'],
+      ['POST', '/api/queue/start'],
+    ] as const) {
+      expect((await inject(h, method, url, { host: 'evil.example' })).statusCode, url).toBe(403);
+      const origin = { host: '127.0.0.1:4317', origin: 'http://evil.example' };
+      expect((await inject(h, method, url, origin)).statusCode, url).toBe(403);
+    }
+    expect(h.engine.queueState().started).toBe(false);
+  });
+
   it('guards unknown routes too', async () => {
     const h = makeApp();
     expect((await inject(h, 'GET', '/api/nope', { host: 'evil.example' })).statusCode).toBe(403);

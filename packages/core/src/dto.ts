@@ -1,4 +1,5 @@
 import type { Status } from './statuses.ts';
+import type { Verdict } from './verdict.ts';
 
 export interface TaskDto {
   id: number;
@@ -30,6 +31,25 @@ export interface MessageDto {
   source: 'app' | 'jira';
   content: string;
   createdAt: string;
+  /** Arrived while a run was active, so that run's prompt did not include it. */
+  waitsForNextRun: boolean;
+}
+
+/** One analysis run (business analyst or architect) and what it concluded. */
+export interface AnalysisRunDto {
+  runId: number;
+  role: 'analyst' | 'architect';
+  agent: string | null;
+  endReason: string | null;
+  finishedAt: string | null;
+  /** Null while the run is open or when it produced no valid verdict. */
+  verdict: Verdict | null;
+  /** The agent's answer text, capped; null while open. */
+  answer: string | null;
+}
+
+export interface AnalysisDto {
+  runs: AnalysisRunDto[];
 }
 
 export interface JournalDto {

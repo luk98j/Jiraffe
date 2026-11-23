@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import type { MessageDto, TaskDto } from '@jiraffe/core';
+import type { AnalysisDto, MessageDto, TaskDto } from '@jiraffe/core';
 import { request } from '../api.ts';
 import { useApiMutation, useTaskDetail } from '../queries.ts';
 import { STATUS_VIEW } from '../statusView.ts';
 
-type Detail = { task: TaskDto; messages: MessageDto[] };
+type Detail = { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto };
 
 function RepoEditor({ task }: { task: TaskDto }) {
   const [value, setValue] = useState(task.repoPath ?? '');
@@ -58,6 +58,7 @@ function Chat({ detail }: { detail: Detail }) {
           source: 'app',
           content,
           createdAt: new Date().toISOString(),
+          waitsForNextRun: false,
         };
         qc.setQueryData<Detail>(['task', task.id], {
           ...previous,
@@ -90,6 +91,12 @@ function Chat({ detail }: { detail: Detail }) {
             <small>
               <span>{m.role === 'user' ? 'You' : 'Agent'}</span> ·{' '}
               <span>{m.source === 'jira' ? 'Jira' : 'App'}</span> · {m.createdAt}
+              {m.waitsForNextRun && (
+                <>
+                  {' '}
+                  · <span className="waits-tag">⏳ Waits for next run</span>
+                </>
+              )}
             </small>
             <div data-testid="message-text">{m.content}</div>
           </div>
@@ -112,7 +119,60 @@ function Chat({ detail }: { detail: Detail }) {
   );
 }
 
-const EMPTY_AREAS = ['Analysis result', 'Logs', 'Diff'];
+const EMPTY_AREAS = ['Logs', 'Diff'];
+
+const ROLE_LABEL = { analyst: 'Business analyst', architect: 'Architect' } as const;
+
+function ItemList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <h5>{title}</h5>
+      <ul>
+        {items.map((i) => (
+          <li key={i}>{i}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AnalysisResult({ analysis }: { analysis: AnalysisDto }) {
+  const runs = analysis.runs;
+  return (
+    <section aria-label="Analysis result" className={runs.length === 0 ? 'empty-area' : 'analysis'}>
+      <h3>Analysis result</h3>
+      {runs.length === 0 && <p>Nothing here yet</p>}
+      {runs.map((r) => (
+        <div key={r.runId} data-testid="analysis-run" className="analysis-run">
+          <h4>{ROLE_LABEL[r.role]}</h4>
+          {r.verdict === null ? (
+            <p className="verdict verdict-pending">
+              <span aria-hidden="true">{r.finishedAt === null ? '⟳' : '✖'}</span>{' '}
+              {r.finishedAt === null ? 'Running' : 'No verdict'}
+            </p>
+          ) : (
+            <>
+              <p
+                className={`verdict ${r.verdict.verdict === 'READY' ? 'verdict-ready' : 'verdict-needs'}`}
+              >
+                <span aria-hidden="true">{r.verdict.verdict === 'READY' ? '✓' : '?'}</span>{' '}
+                {r.verdict.verdict === 'READY' ? 'Ready' : 'Needs information'}
+              </p>
+              <p data-testid="analysis-summary">{r.verdict.summary}</p>
+              <ItemList title="Questions" items={r.verdict.questions} />
+              <ItemList title="Missing" items={r.verdict.missing} />
+              <ItemList
+                title="Permissions proposed by the agent (not applied)"
+                items={r.verdict.permissions}
+              />
+            </>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
 
 export function TaskDetail() {
   const id = Number(useParams().id);
@@ -145,6 +205,7 @@ export function TaskDetail() {
       <RepoEditor key={task.repoPath ?? ''} task={task} />
       <p className="body">{task.body}</p>
       <Chat detail={q.data} />
+      <AnalysisResult analysis={q.data.analysis} />
       {EMPTY_AREAS.map((name) => (
         <section key={name} aria-label={name} className="empty-area">
           <h3>{name}</h3>

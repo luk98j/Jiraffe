@@ -5,6 +5,7 @@ import { runCommentSync, runTaskSync } from './sync.ts';
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
+const POLL_MS = 1500;
 const MAX_TIMEOUT_MS = 2 ** 31 - 1; // larger values make setTimeout fire after 1 ms
 
 /** Second guard behind settings validation. */
@@ -48,6 +49,11 @@ export function createScheduler(ctx: Ctx) {
         () => getSetting(ctx, 'jira_comments_sync_minutes') * MINUTE_MS,
         () => runCommentSync(ctx),
         'comment sync',
+      );
+      every(
+        () => POLL_MS,
+        () => ctx.workers.tick(),
+        'worker poll',
       );
       every(
         () => DAY_MS,

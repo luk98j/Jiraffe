@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { JournalDto, MessageDto, SettingsDto, SyncStateDto, TaskDto } from '@jiraffe/core';
+import type {
+  AnalysisDto,
+  JournalDto,
+  MessageDto,
+  SettingsDto,
+  SyncStateDto,
+  TaskDto,
+} from '@jiraffe/core';
 import { request } from './api.ts';
 
 export const useTasks = () =>
@@ -11,8 +18,24 @@ export const useTasks = () =>
 export const useTaskDetail = (id: number) =>
   useQuery({
     queryKey: ['task', id],
-    queryFn: () => request<{ task: TaskDto; messages: MessageDto[] }>('GET', `/api/tasks/${id}`),
+    queryFn: () =>
+      request<{ task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto }>(
+        'GET',
+        `/api/tasks/${id}`,
+      ),
   });
+
+export interface QueueState {
+  started: boolean;
+  autoAnalysis: boolean;
+  active: { analysis: number; execution: number };
+  max: { analysis: number; execution: number };
+}
+
+export const useQueue = () =>
+  useQuery({ queryKey: ['queue'], queryFn: () => request<QueueState>('GET', '/api/queue') });
+
+export const startQueue = () => request('POST', '/api/queue/start');
 
 export const useDeleted = () =>
   useQuery({

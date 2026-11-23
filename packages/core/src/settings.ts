@@ -3,6 +3,28 @@ import { z } from 'zod';
 const posInt = z.number().int().min(1);
 const nonEmpty = z.string().trim().min(1);
 
+/** Placeholders the execution prompt template may use; anything else is rejected. */
+export const EXECUTION_PLACEHOLDERS = ['task_key', 'title', 'body', 'context'] as const;
+
+export const DEFAULT_EXECUTION_TEMPLATE = [
+  'You are working on task {{task_key}}: {{title}}',
+  '',
+  '{{body}}',
+  '',
+  'Context snapshot (also in .orchestrator/context.md):',
+  '{{context}}',
+  '',
+  'Work only inside the current directory. Commit your work to the current branch. Do not push.',
+].join('\n');
+
+function hasValidPlaceholders(v: string): boolean {
+  const used = [...v.matchAll(/\{\{([^}]*)\}\}/g)].map((m) => m[1] as string);
+  return (
+    used.includes('context') &&
+    used.every((p) => (EXECUTION_PLACEHOLDERS as readonly string[]).includes(p))
+  );
+}
+
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
 /** Credentials are sent to this URL, so it must be https (http only for a local test server). */
@@ -69,6 +91,15 @@ export const SETTINGS = {
     schema: posInt.nullable(),
     default: null as number | null,
     input: 'number',
+  }),
+  run_timeout_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
+  execution_prompt_template: def({
+    schema: nonEmpty.refine(
+      hasValidPlaceholders,
+      'Use only {{task_key}}, {{title}}, {{body}} and {{context}}; {{context}} is required',
+    ),
+    default: DEFAULT_EXECUTION_TEMPLATE,
+    input: 'text',
   }),
   local_task_counter: def({
     schema: z.number().int().min(0),

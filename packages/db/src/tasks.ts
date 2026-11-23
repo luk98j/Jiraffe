@@ -3,14 +3,16 @@ import type { TaskDto } from '@jiraffe/core';
 import type { Db, Tx } from './client.ts';
 import { tasks } from './schema.ts';
 
-// "New comment" (A10): a user or Jira message newer than the latest finished
-// analysis run, or newer than task creation when there is none.
+// "New comment" (A10): a user or Jira message newer than the start of the latest
+// completed analysis run (a message that arrived while that run was working was not
+// in its prompt), or newer than task creation when there is none.
 const hasNewComment = sql<number>`exists (
   select 1 from messages m
   where m.task_id = tasks.id
     and (m.role = 'user' or m.source = 'jira')
     and m.created_at > coalesce(
-      (select max(r.finished_at) from runs r where r.task_id = tasks.id and r.kind = 'analysis'),
+      (select max(r.started_at) from runs r
+        where r.task_id = tasks.id and r.kind = 'analysis' and r.end_reason = 'completed'),
       tasks.created_at)
 )`;
 

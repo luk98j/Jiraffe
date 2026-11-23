@@ -12,6 +12,7 @@ Jiraffe is a local web app: a Jira task board with local tasks, per-task chat an
 
 | Package | Owns |
 |---|---|
+| `packages/adapters` | agent runner interface, Copilot CLI adapter, test fakes; the only package that spawns processes |
 | `packages/core` | state machine, settings schema, shared types; no workspace dependencies |
 | `packages/db` | Drizzle schema, migrations, data access, the status writer |
 | `packages/engine` | `transition()`, event bus, sync, retention, scheduler |
@@ -38,8 +39,8 @@ Run `pnpm build`, `pnpm typecheck` and `pnpm test` before handing work over, and
 
 ## Architecture rules (enforced by `tests/architecture.test.ts`)
 
-- Allowed workspace dependencies: `db` -> `core`; `jira` -> `core`; `engine` -> `core`, `db`, `jira`; `server` -> `core`, `engine`; `web` -> `core`; `core` -> nothing. No relative import may leave its package.
-- Only `db` imports `drizzle-orm` and `better-sqlite3`; only `server` imports `fastify`; only `web` imports `react` and `react-dom`.
+- Allowed workspace dependencies: `adapters` -> `core`; `db` -> `core`; `jira` -> `core`; `engine` -> `core`, `db`, `jira`, `adapters`; `server` -> `core`, `engine`; `web` -> `core`; `core` -> nothing. No relative import may leave its package.
+- Only `db` imports `drizzle-orm` and `better-sqlite3`; only `adapters` imports `node:child_process`; only `server` imports `fastify`; only `web` imports `react` and `react-dom`.
 - Only the engine changes `tasks.status`: `@jiraffe/db/status-writer` (`packages/db/src/taskStatus.ts`, exporting `insertTask` and `applyStatusChange`) is imported only by `packages/engine/src/transition.ts` and `createTask.ts`. No `UPDATE tasks`, `insert(tasks)` or `.set({ status ... })` elsewhere.
 - Do not weaken or bypass these tests. If a rule is in the way, ask the owner.
 

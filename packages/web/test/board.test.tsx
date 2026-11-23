@@ -368,3 +368,59 @@ describe('robustness (AC-73)', () => {
     expect(screen.getByTestId('card-LOC-0001')).toBeInTheDocument();
   });
 });
+
+describe('Start queue (step 5, AC-10)', () => {
+  const queueState = (over: object = {}) => ({
+    started: false,
+    autoAnalysis: false,
+    active: { analysis: 0, execution: 0 },
+    max: { analysis: 2, execution: 2 },
+    ...over,
+  });
+  const withQueue = (state: () => object) => (req: import('./helpers.tsx').Req) => {
+    if (req.method === 'GET' && req.path === '/api/queue') return { body: state() };
+    if (req.method === 'POST' && req.path === '/api/queue/start')
+      return { body: { started: true } };
+    return undefined;
+  };
+
+  it('starts the queue for the session when tasks are queued', async () => {
+    const { user, calls } = board(
+      [task({ id: 1, status: 'queued_analysis' })],
+      withQueue(queueState),
+    );
+    const button = await screen.findByRole('button', { name: 'Start queue' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(
+      screen.getByText('Starts analysis of queued tasks for this session only'),
+    ).toBeInTheDocument();
+    await user.click(button);
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/queue/start')).toBe(true),
+    );
+  });
+
+  it.each([
+    ['nothing is queued', [task({ id: 1, status: 'new' })], {}, 'No task is queued for analysis'],
+    [
+      'it already started',
+      [task({ id: 1, status: 'queued_analysis' })],
+      { started: true },
+      'The queue is already started for this session',
+    ],
+    [
+      'automatic analysis is on',
+      [task({ id: 1, status: 'queued_analysis' })],
+      { autoAnalysis: true },
+      'Automatic analysis is on, so queued tasks start by themselves',
+    ],
+  ])('is disabled with a reason when %s', async (_n, tasks, state, reason) => {
+    board(
+      tasks,
+      withQueue(() => queueState(state)),
+    );
+    const button = await screen.findByRole('button', { name: 'Start queue' });
+    await waitFor(() => expect(button).toHaveAttribute('title', reason));
+    expect(button).toBeDisabled();
+  });
+});

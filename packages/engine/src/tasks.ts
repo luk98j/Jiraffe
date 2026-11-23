@@ -1,10 +1,11 @@
-import type { MessageDto } from '@jiraffe/core';
+import type { AnalysisDto, MessageDto } from '@jiraffe/core';
 import { ConflictError, TaskNotFoundError, ValidationError, type TaskDto } from '@jiraffe/core';
 import {
   getTaskDto,
   insertJournal,
   listDeletedTaskDtos,
   listMessages,
+  listRuns,
   listTaskDtos,
   setDeletedAt,
   setRepoPath,
@@ -12,6 +13,7 @@ import {
 import { write, type Ctx } from './context.ts';
 import { getSetting } from './settings.ts';
 import { createTask } from './createTask.ts';
+import { parseResult } from './analysis.ts';
 
 export function createLocalTask(
   ctx: Ctx,
@@ -55,6 +57,7 @@ export function deleteTask(ctx: Ctx, id: number): void {
     insertJournal(tx, { at: now, taskKey: t.key, status: t.status, action: 'task_deleted' });
     outbox.changed();
   });
+  ctx.workers.abort(id, 'deleted');
 }
 
 export function restoreTask(ctx: Ctx, id: number): void {
@@ -82,9 +85,29 @@ export function listDeleted(ctx: Ctx): TaskDto[] {
   );
 }
 
-/** Task plus its messages; a soft-deleted task counts as not found. */
-export function getTaskDetail(ctx: Ctx, id: number): { task: TaskDto; messages: MessageDto[] } {
+function analysisOf(ctx: Ctx, taskId: number): AnalysisDto {
+  return {
+    runs: listRuns(ctx.db, taskId, 'analysis').map((r) => {
+      const result = parseResult(r.resultJson);
+      return {
+        runId: r.id,
+        role: result.role ?? 'analyst',
+        agent: r.agent,
+        endReason: r.endReason,
+        finishedAt: r.finishedAt,
+        verdict: result.verdict ?? null,
+        answer: result.answer ?? null,
+      };
+    }),
+  };
+}
+
+/** Task, its messages and the analysis runs; a soft-deleted task counts as not found. */
+export function getTaskDetail(
+  ctx: Ctx,
+  id: number,
+): { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto } {
   const task = getTaskDto(ctx.db, id);
   if (!task || task.deletedAt) throw new TaskNotFoundError();
-  return { task, messages: listMessages(ctx.db, id) };
+  return { task, messages: listMessages(ctx.db, id), analysis: analysisOf(ctx, id) };
 }

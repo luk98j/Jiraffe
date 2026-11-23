@@ -4,9 +4,8 @@ import { runRetention } from './retention.ts';
 import { runTaskSync } from './sync.ts';
 
 /**
- * Boot sequence: journal, task sync, retention. Failures are logged and never
- * stop the app from starting. No agent is started and no status changes here
- * (workers arrive in a later step).
+ * Boot sequence: journal, task sync, retention, then the workers are released. Failures
+ * are logged and never stop the app from starting. No agent starts before the sequence ends.
  */
 export async function startEngine(ctx: Ctx): Promise<void> {
   write(ctx, (tx, outbox) => {
@@ -27,4 +26,6 @@ export async function startEngine(ctx: Ctx): Promise<void> {
   } catch (err) {
     ctx.logger.error('startup retention failed', err);
   }
+  ctx.workers.ready = true;
+  ctx.workers.pump();
 }

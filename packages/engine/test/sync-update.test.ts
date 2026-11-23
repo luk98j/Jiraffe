@@ -76,7 +76,7 @@ describe('body_changed_after_analysis (AC-33, AC-34)', () => {
     const t = id('PROJ-1');
     h.raw
       .prepare(
-        "INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', '2026-11-21T09:00:00.000Z')",
+        "INSERT INTO runs (task_id, kind, end_reason, finished_at) VALUES (?, 'analysis', 'completed', '2026-11-21T09:00:00.000Z')",
       )
       .run(t);
     jira.setIssues([issue(1, { description: 'changed' })]);
@@ -87,6 +87,12 @@ describe('body_changed_after_analysis (AC-33, AC-34)', () => {
   it('leaves the flag false without a finished analysis (none, or unfinished)', async () => {
     const { jira, h, id } = await imported(issue(1), issue(2));
     h.raw.prepare("INSERT INTO runs (task_id, kind) VALUES (?, 'analysis')").run(id('PROJ-2'));
+    // A run that finished without completing (crashed) is not a finished analysis (AC-32b).
+    h.raw
+      .prepare(
+        "INSERT INTO runs (task_id, kind, end_reason, finished_at) VALUES (?, 'analysis', 'crashed', 'x')",
+      )
+      .run(id('PROJ-1'));
     jira.setIssues([issue(1, { description: 'changed' }), issue(2, { description: 'changed' })]);
     await h.engine.runTaskSync();
     expect(row(h, id('PROJ-1')).body_changed_after_analysis).toBe(0);
@@ -96,7 +102,9 @@ describe('body_changed_after_analysis (AC-33, AC-34)', () => {
   it('a title-only change does not set the flag', async () => {
     const { jira, h, id } = await imported(issue(1));
     h.raw
-      .prepare("INSERT INTO runs (task_id, kind, finished_at) VALUES (?, 'analysis', 'x')")
+      .prepare(
+        "INSERT INTO runs (task_id, kind, end_reason, finished_at) VALUES (?, 'analysis', 'completed', 'x')",
+      )
       .run(id('PROJ-1'));
     jira.setIssues([issue(1, { title: 'new title' })]);
     await h.engine.runTaskSync();

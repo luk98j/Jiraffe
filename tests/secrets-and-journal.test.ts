@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FakeRunner, verdictBlock } from '@jiraffe/adapters/testing';
 import { createEngine, type Engine } from '@jiraffe/engine';
 import { FakeJiraClient } from '@jiraffe/jira/testing';
 import { buildServer } from '@jiraffe/server';
@@ -191,5 +192,63 @@ describe('journal never holds free text (AC-75)', () => {
     const everything = JSON.stringify(journal);
     for (const marker of Object.values(M).concat(['MARK_PATH']))
       expect(everything, marker).not.toContain(marker);
+  });
+});
+
+describe('analysis runs keep secrets and free text out (AC-83, AC-31)', () => {
+  it('stores no credential anywhere and no agent or task text in the journal', async () => {
+    const out = (text: string) => ({ stream: 'stdout' as const, text });
+    const fake = new FakeRunner({
+      lines: [
+        out(`I read the env: ${TOKEN} and ${EMAIL}`),
+        { stream: 'stderr', text: `stderr also has ${TOKEN}` },
+        ...`PROSE_MARK\n${verdictBlock({
+          verdict: 'NEEDS_INFO',
+          questions: ['QUESTION_MARK'],
+          summary: 'SUMMARY_MARK',
+        })}`
+          .split('\n')
+          .map(out),
+      ],
+    });
+    engine = createEngine({
+      dbPath: join(dir, 't.db'),
+      version: 'test',
+      logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
+      runners: { copilot: fake },
+    });
+    engine.updateSetting('auto_analysis', true);
+    const t = engine.createLocalTask({
+      title: 'TITLE_MARK',
+      description: 'BODY_MARK',
+      repoPath: '/repo/PATH_MARK',
+    });
+    engine.addUserMessage(t.id, 'COMMENT_MARK');
+    engine.transition(t.id, 'enqueue');
+    await engine.start();
+    await engine.idle();
+
+    expect(engine.getTask(t.id).status).toBe('waiting_user');
+    expect(fake.calls[0]?.prompt).toContain('TITLE_MARK'); // the agent does get the task
+    expect(fake.calls[0]?.prompt).not.toContain(TOKEN);
+
+    const db = dumpDatabase();
+    for (const secret of [TOKEN, EMAIL]) {
+      expect(db, `db has ${secret}`).not.toContain(secret);
+      expect(JSON.stringify(logs)).not.toContain(secret);
+    }
+    expect(db).toContain('[redacted]'); // the output was stored, with the secrets replaced
+    const journal = JSON.stringify(engine.listJournal({ limit: 1000 }));
+    for (const m of [
+      'PROSE_MARK',
+      'QUESTION_MARK',
+      'SUMMARY_MARK',
+      'TITLE_MARK',
+      'BODY_MARK',
+      'COMMENT_MARK',
+      'PATH_MARK',
+    ])
+      expect(journal, m).not.toContain(m);
+    expect(db).toContain('QUESTION_MARK'); // questions live in messages, by design
   });
 });

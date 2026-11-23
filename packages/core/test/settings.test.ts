@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS, parseSetting } from '../src/index.ts';
 
+const EXEC_TEMPLATE = SETTINGS.execution_prompt_template.default;
+
 // Section 10 defaults, written out literally (AC-8).
 const DEFAULTS: Record<string, unknown> = {
   auto_analysis: false,
@@ -20,6 +22,8 @@ const DEFAULTS: Record<string, unknown> = {
   retention_days: 28,
   journal_retention_days: null,
   local_task_counter: 0,
+  run_timeout_minutes: 30,
+  execution_prompt_template: EXEC_TEMPLATE,
 };
 
 describe('settings schema', () => {
@@ -48,6 +52,22 @@ describe('settings schema', () => {
     expect(parseSetting('repo_map', { A: '' }).ok).toBe(false);
     expect(parseSetting('allowed_tools', ['']).ok).toBe(false);
     expect(parseSetting('worktrees_dir', '').ok).toBe(false);
+  });
+
+  it('validates run_timeout_minutes (1..1440)', () => {
+    expect(parseSetting('run_timeout_minutes', 5)).toEqual({ ok: true, value: 5 });
+    for (const bad of [0, 1441, 1.5, '30', null]) {
+      expect(parseSetting('run_timeout_minutes', bad).ok, String(bad)).toBe(false);
+    }
+  });
+
+  it('validates execution_prompt_template placeholders', () => {
+    expect(EXEC_TEMPLATE).toContain('{{context}}');
+    expect(parseSetting('execution_prompt_template', 'Do {{title}}: {{context}}').ok).toBe(true);
+    expect(parseSetting('execution_prompt_template', 'Do {{title}}').ok).toBe(false); // no context
+    expect(parseSetting('execution_prompt_template', '{{context}} {{secret}}').ok).toBe(false);
+    expect(parseSetting('execution_prompt_template', '{{context}} {{ env.TOKEN }}').ok).toBe(false);
+    expect(parseSetting('execution_prompt_template', '   ').ok).toBe(false);
   });
 
   it('accepts valid values', () => {

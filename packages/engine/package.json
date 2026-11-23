@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jiraffe/adapters": "workspace:*",
     "@jiraffe/core": "workspace:*",
     "@jiraffe/db": "workspace:*",
     "@jiraffe/jira": "workspace:*"

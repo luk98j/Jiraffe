@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { deleteTask, sendEvent, useApiMutation, useTasks } from '../queries.ts';
+import {
+  deleteTask,
+  sendEvent,
+  startQueue,
+  useApiMutation,
+  useQueue,
+  useTasks,
+} from '../queries.ts';
 import { COLUMNS, FINISHED, NEEDS_USER } from '../taskView.ts';
 import { AddTaskForm } from './AddTaskForm.tsx';
 import { TaskCard } from './TaskCard.tsx';
@@ -9,12 +16,26 @@ export function Board() {
   const [hideFinished, setHideFinished] = useState(false);
   const event = useApiMutation((v: { id: number; event: string }) => sendEvent(v.id, v.event));
   const del = useApiMutation((id: number) => deleteTask(id));
-  const error = tasks.error ?? event.error ?? del.error;
+  const queue = useQueue();
+  const start = useApiMutation(() => startQueue());
+  const error = tasks.error ?? event.error ?? del.error ?? start.error;
 
   const all = tasks.data ?? [];
   const columns = COLUMNS.filter(
     (c) => !(hideFinished && c.statuses.every((s) => FINISHED.includes(s))),
   );
+
+  const queued = all.filter((t) => t.status === 'queued_analysis').length;
+  const q = queue.data;
+  const startDisabledReason = !q
+    ? 'The queue state is not loaded'
+    : q.autoAnalysis
+      ? 'Automatic analysis is on, so queued tasks start by themselves'
+      : q.started
+        ? 'The queue is already started for this session'
+        : queued === 0
+          ? 'No task is queued for analysis'
+          : '';
 
   return (
     <section>
@@ -28,6 +49,21 @@ export function Board() {
           />{' '}
           Hide done and cancelled
         </label>
+        <span className="queue-control">
+          <button
+            type="button"
+            disabled={startDisabledReason !== '' || start.isPending}
+            title={startDisabledReason || 'Start analysing the queued tasks'}
+            onClick={() => start.mutate(undefined)}
+          >
+            Start queue
+          </button>
+          <span className="queue-note">
+            {q?.started || q?.autoAnalysis
+              ? '▶ Analysis is running for queued tasks'
+              : 'Starts analysis of queued tasks for this session only'}
+          </span>
+        </span>
       </div>
       {error && (
         <div role="alert" className="error">

@@ -326,3 +326,73 @@ describe('sync (AC-43, AC-79)', () => {
     });
   });
 });
+
+describe('queue and analysis (step 5)', () => {
+  it('reports the queue state and starts the queue without enqueueing anything', async () => {
+    const h = makeApp();
+    const t = await task(h);
+    expect((await h.req('GET', '/api/queue')).body).toEqual({
+      started: false,
+      autoAnalysis: false,
+      active: { analysis: 0, execution: 0 },
+      max: { analysis: 2, execution: 2 },
+    });
+    expect(await h.req('POST', '/api/queue/start')).toEqual({
+      status: 200,
+      body: { started: true },
+    });
+    expect((await h.req('GET', '/api/queue')).body.started).toBe(true);
+    expect((await h.req('GET', `/api/tasks/${t.id}`)).body.task.status).toBe('new');
+  });
+
+  it('returns the analysis runs with the verdict in the task detail (AC-30, AC-31)', async () => {
+    const h = makeApp();
+    const t = await task(h);
+    expect((await h.req('GET', `/api/tasks/${t.id}`)).body.analysis).toEqual({ runs: [] });
+    const verdict = {
+      verdict: 'READY',
+      questions: [],
+      missing: [],
+      permissions: ['read: src/**'],
+      summary: 'All clear',
+    };
+    h.raw
+      .prepare(
+        `INSERT INTO runs (task_id, kind, agent, end_reason, status, started_at, finished_at, result_json)
+         VALUES (?, 'analysis', 'copilot', 'completed', 'finished', 'a', 'b', ?)`,
+      )
+      .run(t.id, JSON.stringify({ role: 'analyst', verdict, answer: 'text' }));
+    const { analysis } = (await h.req('GET', `/api/tasks/${t.id}`)).body;
+    expect(analysis.runs).toEqual([
+      expect.objectContaining({
+        role: 'analyst',
+        agent: 'copilot',
+        verdict,
+        endReason: 'completed',
+      }),
+    ]);
+  });
+
+  it('refuses every agent-driven event from the client (AC-85)', async () => {
+    const h = makeApp();
+    const t = await task(h);
+    for (const event of [
+      'analysis_started',
+      'analysis_ready',
+      'analysis_needs_info',
+      'quota',
+      'failed',
+      'user_answered',
+      'delegate',
+      'execution_started',
+      'execution_done',
+      'credit_limit',
+      'recovered_to_queued_analysis',
+      'recovered_to_delegated',
+    ]) {
+      const r = await h.req('POST', `/api/tasks/${t.id}/events`, { event });
+      expect(r.status, event).toBe(400);
+    }
+    expect((await h.req('GET', `/api/tasks/${t.id}`)).body.task.status).toBe('new');
+  });
+});

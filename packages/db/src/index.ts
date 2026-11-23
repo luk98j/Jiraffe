@@ -9,7 +9,20 @@ export {
   setDeletedAt,
   setRepoPath,
 } from './tasks.ts';
-export { insertEvent } from './events.ts';
+export { insertEvent, listUnprocessedEvents, markEventsProcessed } from './events.ts';
+export {
+  countOpenRuns,
+  finishRun,
+  getRun,
+  insertRun,
+  listRuns,
+  setRunPid,
+  setRunResult,
+  type RunEndReason,
+  type RunKind,
+  type RunRow,
+} from './runs.ts';
+export { nextClaimCandidate, type ClaimCandidate } from './claims.ts';
 export { insertMessage, listMessages } from './messages.ts';
 export {
   deleteJournalBefore,

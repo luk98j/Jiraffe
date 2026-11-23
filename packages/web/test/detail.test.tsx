@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { MessageDto, TaskDto } from '@jiraffe/core';
+import type { AnalysisDto, MessageDto, TaskDto } from '@jiraffe/core';
 import { renderApp, task } from './helpers.tsx';
 
 const msg = (id: number, over: Partial<MessageDto> = {}): MessageDto => ({
@@ -10,11 +10,16 @@ const msg = (id: number, over: Partial<MessageDto> = {}): MessageDto => ({
   source: 'app',
   content: `m${id}`,
   createdAt: `2026-11-20T10:0${id}:00.000Z`,
+  waitsForNextRun: false,
   ...over,
 });
 
-function server(initial: { task: TaskDto; messages: MessageDto[] }) {
-  const state = { ...initial, messages: [...initial.messages] };
+function server(initial: { task: TaskDto; messages: MessageDto[]; analysis?: AnalysisDto }) {
+  const state = {
+    analysis: { runs: [] } as AnalysisDto,
+    ...initial,
+    messages: [...initial.messages],
+  };
   const handler = (req: import('./helpers.tsx').Req) => {
     if (req.method === 'GET' && req.path === `/api/tasks/${state.task.id}`) return { body: state };
     if (req.method === 'POST' && req.path.endsWith('/messages')) {
@@ -143,5 +148,92 @@ describe('chat (AC-68)', () => {
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Internal server error');
     await waitFor(() => expect(screen.queryByText('will fail')).toBeNull());
+  });
+});
+
+describe('analysis result and waiting messages (step 5)', () => {
+  const run = (over: Partial<AnalysisDto['runs'][number]>): AnalysisDto['runs'][number] => ({
+    runId: 1,
+    role: 'analyst',
+    agent: 'copilot',
+    endReason: 'completed',
+    finishedAt: '2026-11-20T10:05:00.000Z',
+    answer: null,
+    verdict: null,
+    ...over,
+  });
+
+  it('shows per-agent verdict with icon and text, summary, questions and permissions', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'waiting_user' }),
+      messages: [],
+      analysis: {
+        runs: [
+          run({
+            verdict: {
+              verdict: 'NEEDS_INFO',
+              questions: ['Which API?'],
+              missing: ['Acceptance criteria'],
+              permissions: ['read: src/**'],
+              summary: 'Needs a decision',
+            },
+          }),
+          run({
+            runId: 2,
+            role: 'architect',
+            verdict: {
+              verdict: 'READY',
+              questions: [],
+              missing: [],
+              permissions: [],
+              summary: 'Looks fine',
+            },
+          }),
+        ],
+      },
+    });
+    renderApp('/tasks/1', handler);
+    const region = await screen.findByRole('region', { name: 'Analysis result' });
+    const runs = within(region).getAllByTestId('analysis-run');
+    expect(within(runs[0]!).getByText('Business analyst')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Needs information')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Needs a decision')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Which API?')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Acceptance criteria')).toBeInTheDocument();
+    expect(
+      within(runs[0]!).getByText('Permissions proposed by the agent (not applied)'),
+    ).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('read: src/**')).toBeInTheDocument();
+    expect(within(runs[1]!).getByText('Architect')).toBeInTheDocument();
+    expect(within(runs[1]!).getByText('Ready')).toBeInTheDocument();
+    expect(within(region).queryByText('Nothing here yet')).toBeNull();
+  });
+
+  it('shows a run without a verdict as running or as no verdict', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'analysing' }),
+      messages: [],
+      analysis: {
+        runs: [
+          run({ runId: 1, finishedAt: null, endReason: null }),
+          run({ runId: 2, endReason: 'crashed' }),
+        ],
+      },
+    });
+    renderApp('/tasks/1', handler);
+    const region = await screen.findByRole('region', { name: 'Analysis result' });
+    expect(within(region).getByText('Running')).toBeInTheDocument();
+    expect(within(region).getByText('No verdict')).toBeInTheDocument();
+  });
+
+  it('tags a message that waits for the next run', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'analysing' }),
+      messages: [msg(1, { waitsForNextRun: true }), msg(2)],
+    });
+    renderApp('/tasks/1', handler);
+    const items = await screen.findAllByTestId('message');
+    expect(within(items[0]!).getByText(/Waits for next run/)).toBeInTheDocument();
+    expect(within(items[1]!).queryByText(/Waits for next run/)).toBeNull();
   });
 });

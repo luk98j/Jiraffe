@@ -64,7 +64,7 @@ export const runs = sqliteTable('runs', {
   kind: text('kind', { enum: ['analysis', 'execution'] }).notNull(),
   agent: text('agent'),
   sessionId: text('session_id'),
-  status: text('status'),
+  status: text('status', { enum: ['running', 'finished'] }),
   pid: integer('pid'),
   maxCredits: real('max_credits'),
   creditsUsed: real('credits_used'),
@@ -73,6 +73,11 @@ export const runs = sqliteTable('runs', {
   }),
   startedAt: text('started_at'),
   finishedAt: text('finished_at'),
+  /** Analysis: `{ role, verdict, answer }`. */
+  resultJson: text('result_json'),
+  worktreePath: text('worktree_path'),
+  branch: text('branch'),
+  baseCommit: text('base_commit'),
 });
 
 export const events = sqliteTable(

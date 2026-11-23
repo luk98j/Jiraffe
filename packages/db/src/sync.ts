@@ -39,12 +39,12 @@ export function listIgnoredJiraKeys(db: Db | Tx): Set<string> {
   );
 }
 
-// shortcut: "finished analysis" is any analysis run with finished_at set (runs.status is not defined by the spec); revisit when workers exist.
+/** A finished analysis is one that completed; a crashed or cancelled run does not count (AC-32b). */
 export function hasFinishedAnalysis(db: Db | Tx, taskId: number): boolean {
   return !!db
     .select({ id: runs.id })
     .from(runs)
-    .where(and(eq(runs.taskId, taskId), eq(runs.kind, 'analysis'), isNotNull(runs.finishedAt)))
+    .where(and(eq(runs.taskId, taskId), eq(runs.kind, 'analysis'), eq(runs.endReason, 'completed')))
     .get();
 }
 
