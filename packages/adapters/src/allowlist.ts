@@ -5,7 +5,7 @@
  */
 
 const BLANKET = /^[\s*.?]*$|^(all|any|allow[-_ ]?all|everything)$/i;
-const FLAG_DENY = /--yolo|--allow-all|--autopilot|allow[-_]all/i;
+const FLAG_DENY = /--yolo|--allow-all|--autopilot|allow[-_]all|skip-permissions|dangerously/i;
 
 /** Lower-cased words of a command with quoting and escapes removed, split on shell separators. */
 function words(entry: string): string[] {

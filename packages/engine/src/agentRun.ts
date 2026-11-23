@@ -6,9 +6,9 @@ import { getSetting } from './settings.ts';
 import { applyTransition } from './transition.ts';
 import type { AbortReason, Claim, LiveRun } from './workers.ts';
 
-/** The one place that picks an adapter. */
+/** The one place that picks an adapter: the `agent` setting, read at every run start. */
 export function selectRunner(ctx: Ctx): AgentRunner | undefined {
-  return ctx.runners.copilot;
+  return ctx.runners[getSetting(ctx, 'agent')];
 }
 
 export interface AgentResult {

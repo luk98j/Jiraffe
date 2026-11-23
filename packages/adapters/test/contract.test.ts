@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createClaudeRunner,
   createCopilotRunner,
   nodeSpawner,
   runCommand,
@@ -7,6 +8,7 @@ import {
   type OutputLine,
   type RunOptions,
 } from '../src/index.ts';
+import { testOnlyClaudeProfile } from './claude-profile.ts';
 import { FakeRunner, stubSpawner, type StubScript, type StubSpawner } from '../src/testing.ts';
 
 interface Made {
@@ -26,6 +28,14 @@ const impls: [string, (s: StubScript) => Made][] = [
     (s) => {
       const spawner = stubSpawner(s);
       return { runner: createCopilotRunner(spawner), spawner };
+    },
+  ],
+  [
+    // The real Claude profile spawns nothing, so the lifecycle runs with a test-only profile.
+    'Claude adapter on a stub spawner (test-only confirmed profile)',
+    (s) => {
+      const spawner = stubSpawner(s);
+      return { runner: createClaudeRunner(spawner, testOnlyClaudeProfile), spawner };
     },
   ],
 ];

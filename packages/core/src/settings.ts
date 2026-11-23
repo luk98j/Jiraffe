@@ -102,6 +102,7 @@ export const SETTINGS = {
     default: DEFAULT_EXECUTION_TEMPLATE,
     input: 'text',
   }),
+  agent: def({ schema: z.enum(['copilot', 'claude']), default: 'copilot' as const, input: 'text' }),
   local_task_counter: def({
     schema: z.number().int().min(0),
     default: 0,

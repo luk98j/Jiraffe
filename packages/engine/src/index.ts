@@ -1,4 +1,5 @@
 import {
+  createClaudeRunner,
   createCopilotRunner,
   nodeSpawner,
   realGit,
@@ -68,7 +69,10 @@ export function createEngine(opts: EngineOptions) {
       },
     },
     version: opts.version,
-    runners: opts.runners ?? { copilot: createCopilotRunner(nodeSpawner) },
+    runners: opts.runners ?? {
+      copilot: createCopilotRunner(nodeSpawner),
+      claude: createClaudeRunner(nodeSpawner),
+    },
     git: opts.git ?? realGit,
     workers: undefined as never, // assigned right below, once the context exists
     ...(opts.jiraClient ? { jiraClient: opts.jiraClient } : {}),

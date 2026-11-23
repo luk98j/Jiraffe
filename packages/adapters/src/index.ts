@@ -29,3 +29,11 @@ export {
   writeInside,
   type Done,
 } from './worktree.ts';
+export {
+  CLAUDE_NOT_VERIFIED,
+  buildClaudeArgs,
+  claudeProfile,
+  createClaudeRunner,
+  type BuiltClaudeArgs,
+  type ClaudeProfile,
+} from './claude.ts';

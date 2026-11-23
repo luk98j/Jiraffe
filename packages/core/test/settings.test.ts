@@ -24,6 +24,7 @@ const DEFAULTS: Record<string, unknown> = {
   local_task_counter: 0,
   run_timeout_minutes: 30,
   execution_prompt_template: EXEC_TEMPLATE,
+  agent: 'copilot',
 };
 
 describe('settings schema', () => {
@@ -68,6 +69,13 @@ describe('settings schema', () => {
     expect(parseSetting('execution_prompt_template', '{{context}} {{secret}}').ok).toBe(false);
     expect(parseSetting('execution_prompt_template', '{{context}} {{ env.TOKEN }}').ok).toBe(false);
     expect(parseSetting('execution_prompt_template', '   ').ok).toBe(false);
+  });
+
+  it('agent accepts only copilot or claude (AC-79)', () => {
+    expect(parseSetting('agent', 'claude')).toEqual({ ok: true, value: 'claude' });
+    expect(parseSetting('agent', 'copilot')).toEqual({ ok: true, value: 'copilot' });
+    for (const bad of ['', 'Claude', 'gpt', 'copilot ', 1, null, ['claude']])
+      expect(parseSetting('agent', bad).ok, String(bad)).toBe(false);
   });
 
   it('accepts valid values', () => {
