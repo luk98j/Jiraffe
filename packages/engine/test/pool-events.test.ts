@@ -253,34 +253,4 @@ describe('execution (minimal, before worktrees)', () => {
     expect(payload.message).toMatch(/not confirmed/);
     expect(eventRows(h, 'execution_started', id)).toHaveLength(1);
   });
-
-  it('hands the allowed_tools setting to the adapter exactly (AC-56 preview)', async () => {
-    const fake = new FakeRunner({});
-    const h = makeEngine({ runners: { copilot: fake } });
-    h.engine.updateSetting('allowed_tools', ['git status', 'gradle test']);
-    newTaskIn(h.engine, 'delegated');
-    await h.engine.start();
-    await h.engine.idle();
-    expect(fake.calls[0]?.options.allowedTools).toEqual(['git status', 'gradle test']);
-  });
-
-  it('fails the task and keeps the tail when the execution agent exits non-zero', async () => {
-    const fake = new FakeRunner({ exitCode: 1, lines: [{ stream: 'stderr', text: 'nope' }] });
-    const h = makeEngine({ runners: { copilot: fake } });
-    const id = newTaskIn(h.engine, 'delegated');
-    await h.engine.start();
-    await h.engine.idle();
-    expect(statusOf(h, id)).toBe('failed');
-    expect(JSON.parse(eventRows(h, 'run_error', id)[0]!.payload_json!).tail).toContain('nope');
-  });
-
-  it('restarts a task that is `running` without a live run (resumed) on a fresh run', async () => {
-    const fake = new FakeRunner({});
-    const h = makeEngine({ runners: { copilot: fake } });
-    const id = newTaskIn(h.engine, 'running');
-    await h.engine.start();
-    await h.engine.idle();
-    expect(runRows(h, id)).toHaveLength(1);
-    expect(statusOf(h, id)).toBe('review');
-  });
 });

@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AnalysisDto,
+  DiffDto,
+  LogLineDto,
+  LogsDto,
+  TaskExtrasDto,
   JournalDto,
   MessageDto,
   SettingsDto,
@@ -19,7 +23,7 @@ export const useTaskDetail = (id: number) =>
   useQuery({
     queryKey: ['task', id],
     queryFn: () =>
-      request<{ task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto }>(
+      request<{ task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto } & TaskExtrasDto>(
         'GET',
         `/api/tasks/${id}`,
       ),
@@ -72,3 +76,40 @@ export function useApiMutation<V, R = unknown>(fn: (v: V) => Promise<R>) {
 export const sendEvent = (id: number, event: string) =>
   request('POST', `/api/tasks/${id}/events`, { event });
 export const deleteTask = (id: number) => request('DELETE', `/api/tasks/${id}`);
+
+export const delegateTask = (id: number) => request('POST', `/api/tasks/${id}/delegate`);
+
+/** Deletes a task; the worktree and branch go only when `removeWorktree` is true. */
+export const deleteTaskWith = (id: number, removeWorktree: boolean) =>
+  request<{ removalError?: string } | undefined>(
+    'DELETE',
+    `/api/tasks/${id}${removeWorktree ? '?removeWorktree=1' : ''}`,
+  );
+
+/** Every stored output line of the task, fetched in pages by event id. */
+export const useLogs = (id: number, enabled: boolean) =>
+  useQuery({
+    queryKey: ['logs', id],
+    enabled,
+    queryFn: async () => {
+      const lines: LogLineDto[] = [];
+      let truncated = false;
+      for (;;) {
+        const after = lines.at(-1)?.id ?? 0;
+        const page = await request<LogsDto>(
+          'GET',
+          `/api/tasks/${id}/logs?after=${after}&limit=500`,
+        );
+        lines.push(...page.lines);
+        truncated ||= page.truncated;
+        if (page.lines.length < 500) return { lines, truncated };
+      }
+    },
+  });
+
+export const useDiff = (id: number, enabled: boolean) =>
+  useQuery({
+    queryKey: ['diff', id],
+    enabled,
+    queryFn: () => request<DiffDto>('GET', `/api/tasks/${id}/diff`),
+  });

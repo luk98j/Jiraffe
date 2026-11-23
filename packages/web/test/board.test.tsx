@@ -196,19 +196,42 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
     expect(within(await card('LOC-0003')).getByRole('button', { name: 'Analyse' })).toBeEnabled();
   });
 
-  it('shows Delegate only on ready tasks, always disabled, with the right reason', async () => {
+  it('shows Delegate only on ready tasks; disabled with the engine reason as tooltip (AC-40)', async () => {
+    const reason = 'Description changed in Jira, re-run the analysis';
     board([
-      task({ id: 1, status: 'ready_to_delegate' }),
-      task({ id: 2, status: 'ready_to_delegate', bodyChangedAfterAnalysis: true }),
+      task({
+        id: 1,
+        status: 'ready_to_delegate',
+        delegate: { ok: true, reason: null, permissions: [] },
+      }),
+      task({
+        id: 2,
+        status: 'ready_to_delegate',
+        delegate: { ok: false, reason, permissions: [] },
+      }),
       task({ id: 3 }),
     ]);
-    const d1 = within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' });
-    expect(d1).toBeDisabled();
-    expect(d1).toHaveAttribute('title', 'Execution is not available yet');
+    expect(within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' })).toBeEnabled();
     const d2 = within(await card('LOC-0002')).getByRole('button', { name: 'Delegate' });
     expect(d2).toBeDisabled();
-    expect(d2).toHaveAttribute('title', 'Description changed in Jira: re-run the analysis first');
+    expect(d2).toHaveAttribute('title', reason);
     expect(within(await card('LOC-0003')).queryByRole('button', { name: 'Delegate' })).toBeNull();
+  });
+
+  it('clicking an enabled Delegate posts to the delegate endpoint', async () => {
+    const { user, calls } = board(
+      [
+        task({
+          id: 1,
+          status: 'ready_to_delegate',
+          delegate: { ok: true, reason: null, permissions: [] },
+        }),
+      ],
+      (req) =>
+        req.method === 'POST' && req.path === '/api/tasks/1/delegate' ? { body: {} } : undefined,
+    );
+    await user.click(within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/api/tasks/1/delegate')).toBe(true));
   });
 
   it('Answer, Show diff, Logs and Show error link to the task detail', async () => {

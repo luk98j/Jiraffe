@@ -48,7 +48,7 @@ export type BuiltArgs = { args: string[] } | { error: string };
 
 /**
  * Builds the argument list from confirmed profile entries only. It has no code path that
- * emits --yolo, --autopilot or an allow-all flag, whatever the options say.
+ * emits an unrestricted-mode flag, whatever the options say.
  */
 export function buildCopilotArgs(
   prompt: string,

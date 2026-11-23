@@ -1,5 +1,5 @@
 export * from './runner.ts';
-export { nodeSpawner, type ChildLike, type KillSignal, type Spawner } from './spawner.ts';
+export { childEnv, nodeSpawner, type ChildLike, type KillSignal, type Spawner } from './spawner.ts';
 export { runCommand } from './exec.ts';
 export { isConfirmed, type ProfileEntry } from './profile.ts';
 export {
@@ -11,3 +11,21 @@ export {
 } from './copilot.ts';
 export { matchesAllowEntry, validateAllowedTools, type AllowlistCheck } from './allowlist.ts';
 export { realGit, type GitResult, type GitRunner } from './git.ts';
+export {
+  KEY_PATTERN,
+  resolveInside,
+  resolveWorktreePath,
+  worktreesRoot,
+  type PathResult,
+} from './paths.ts';
+export {
+  DIFF_CAP,
+  addInfoExclude,
+  deleteBranch,
+  diffSince,
+  ensureWorktree,
+  headCommit,
+  removeWorktree,
+  writeInside,
+  type Done,
+} from './worktree.ts';

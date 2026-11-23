@@ -15,6 +15,16 @@ export interface Spawner {
   spawn(cmd: string, args: readonly string[], o: { cwd: string }): ChildLike;
 }
 
+/** Credentials the agent must never inherit (owner decision Q5). */
+const WITHHELD_ENV = ['JIRA_EMAIL', 'JIRA_API_TOKEN'];
+
+/** The environment of an agent child process: ours without the Jira credentials. */
+export function childEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out = { ...env };
+  for (const k of WITHHELD_ENV) delete out[k];
+  return out;
+}
+
 /**
  * The only place a process is spawned. Argument arrays, never a shell. The child leads its
  * own process group so a kill reaches its children too. POSIX only.
@@ -23,7 +33,7 @@ export const nodeSpawner: Spawner = {
   spawn(cmd, args, o) {
     const child = spawn(cmd, [...args], {
       cwd: o.cwd,
-      env: process.env,
+      env: childEnv(),
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

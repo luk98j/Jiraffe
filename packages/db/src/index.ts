@@ -9,15 +9,23 @@ export {
   setDeletedAt,
   setRepoPath,
 } from './tasks.ts';
-export { insertEvent, listUnprocessedEvents, markEventsProcessed } from './events.ts';
+export {
+  insertEvent,
+  latestEventOfType,
+  listEventsAfter,
+  listUnprocessedEvents,
+  markEventsProcessed,
+} from './events.ts';
 export {
   countOpenRuns,
   finishRun,
   getRun,
   insertRun,
   listRuns,
+  listWorktreeRuns,
   setRunPid,
   setRunResult,
+  setRunWorktree,
   type RunEndReason,
   type RunKind,
   type RunRow,

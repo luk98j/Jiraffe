@@ -1,4 +1,9 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Verdict } from '@jiraffe/core';
+import { matchesAllowEntry } from './allowlist.ts';
 import { runCommand } from './exec.ts';
 import type { GitResult, GitRunner } from './git.ts';
 import type {
@@ -27,6 +32,12 @@ export interface StubScript {
   /** Emit a spawn error instead of running (for example `{ code: 'ENOENT' }`). */
   error?: { code?: string; message: string };
   pid?: number;
+  /**
+   * Test-only simulation of the CLI: the agent tries this command. If no allowlist entry
+   * matches, the simulated CLI refuses (stderr line, exit 1). This is NOT enforcement; the
+   * app cannot see tool calls of a real `-p` run.
+   */
+  tryCommand?: string;
 }
 
 export interface StubSpawner extends Spawner {
@@ -139,6 +150,18 @@ export class FakeRunner implements AgentRunner {
       typeof this.nextScript === 'function'
         ? this.nextScript(call, this.calls.length)
         : this.nextScript;
+    const cmd = this.current.tryCommand;
+    if (cmd !== undefined) {
+      const allowed = (options.allowedTools ?? []).some((e) => matchesAllowEntry(e, cmd));
+      const line: OutputLine = allowed
+        ? { stream: 'stdout', text: `ran: ${cmd}` }
+        : { stream: 'stderr', text: `refused: ${cmd}` };
+      this.current = {
+        ...this.current,
+        lines: [...(this.current.lines ?? []), line],
+        ...(allowed ? {} : { exitCode: 1 }),
+      };
+    }
     return runCommand(this.spawner, 'fake-agent', [], {
       cwd,
       timeoutMs: options.timeoutMs,
@@ -182,4 +205,27 @@ export class FakeGit implements GitRunner {
       ...this.respond(args, o.cwd, this.calls.length),
     };
   }
+}
+
+/** Runs git synchronously with a per-command identity (tests only). */
+export function gitSync(cwd: string, ...args: string[]): string {
+  return execFileSync(
+    'git',
+    ['-c', 'user.name=Test', '-c', 'user.email=test@example.test', ...args],
+    {
+      cwd,
+      encoding: 'utf8',
+    },
+  );
+}
+
+/** A throwaway git repository with one commit. Identity is passed per command, never global. */
+export function makeTempRepo(): { path: string; git: (...args: string[]) => string } {
+  const path = realpathSync(mkdtempSync(join(tmpdir(), 'jiraffe-repo-')));
+  const git = (...args: string[]) => gitSync(path, ...args);
+  git('init', '-q', '-b', 'main');
+  writeFileSync(join(path, 'a.txt'), 'one\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'init');
+  return { path, git };
 }

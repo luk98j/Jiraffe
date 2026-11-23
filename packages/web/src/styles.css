@@ -855,3 +855,37 @@ section > ul li button {
 .waits-tag {
   color: #fbbf24;
 }
+
+/* ---------- Execution panels ---------- */
+
+.delegate,
+.logs,
+.diff,
+.run-error {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.blocked {
+  color: #fb923c;
+  font-weight: 600;
+}
+.warning {
+  color: #fbbf24;
+}
+.run-error h3 {
+  color: #f87171;
+}
+.logs pre,
+.diff pre,
+.run-error pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin: 0;
+}
+.log-stderr {
+  color: #fca5a5;
+}

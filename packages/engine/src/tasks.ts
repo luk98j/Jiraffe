@@ -1,4 +1,4 @@
-import type { AnalysisDto, MessageDto } from '@jiraffe/core';
+import type { AnalysisDto, MessageDto, TaskExtrasDto } from '@jiraffe/core';
 import { ConflictError, TaskNotFoundError, ValidationError, type TaskDto } from '@jiraffe/core';
 import {
   getTaskDto,
@@ -14,6 +14,8 @@ import { write, type Ctx } from './context.ts';
 import { getSetting } from './settings.ts';
 import { createTask } from './createTask.ts';
 import { parseResult } from './analysis.ts';
+import { canDelegate } from './delegate.ts';
+import { taskExtras } from './review.ts';
 
 export function createLocalTask(
   ctx: Ctx,
@@ -73,7 +75,9 @@ export function restoreTask(ctx: Ctx, id: number): void {
 }
 
 export function listTasks(ctx: Ctx): TaskDto[] {
-  return listTaskDtos(ctx.db);
+  return listTaskDtos(ctx.db).map((t) =>
+    t.status === 'ready_to_delegate' ? { ...t, delegate: canDelegate(ctx, t.id) } : t,
+  );
 }
 
 /** Soft-deleted tasks still inside the retention window (boundary included). */
@@ -106,8 +110,13 @@ function analysisOf(ctx: Ctx, taskId: number): AnalysisDto {
 export function getTaskDetail(
   ctx: Ctx,
   id: number,
-): { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto } {
+): { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto } & TaskExtrasDto {
   const task = getTaskDto(ctx.db, id);
   if (!task || task.deletedAt) throw new TaskNotFoundError();
-  return { task, messages: listMessages(ctx.db, id), analysis: analysisOf(ctx, id) };
+  return {
+    task,
+    messages: listMessages(ctx.db, id),
+    analysis: analysisOf(ctx, id),
+    ...taskExtras(ctx, id),
+  };
 }

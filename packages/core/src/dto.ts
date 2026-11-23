@@ -1,6 +1,13 @@
 import type { Status } from './statuses.ts';
 import type { Verdict } from './verdict.ts';
 
+/** Whether Delegate is allowed now, and why not. `permissions` is display only. */
+export interface DelegateDto {
+  ok: boolean;
+  reason: string | null;
+  permissions: string[];
+}
+
 export interface TaskDto {
   id: number;
   source: 'jira' | 'local';
@@ -22,6 +29,8 @@ export interface TaskDto {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Filled by the engine for tasks that are ready to delegate. */
+  delegate?: DelegateDto;
 }
 
 export interface MessageDto {
@@ -77,4 +86,33 @@ export interface SyncStateDto {
 
 export interface ApiError {
   error: { code: string; message: string; field?: string };
+}
+
+export interface TaskExtrasDto {
+  delegate: DelegateDto;
+  /** Message of the latest run_error event, for Show error. */
+  lastError: { message: string; tail: string | null } | null;
+  /** Execution will restart in an existing worktree. */
+  restartsInWorktree: boolean;
+  hasWorktree: boolean;
+}
+
+export interface LogLineDto {
+  id: number;
+  runId: number;
+  stream: 'stdout' | 'stderr';
+  text: string;
+  at: string;
+}
+
+export interface LogsDto {
+  lines: LogLineDto[];
+  /** A `log_truncated` event exists in this page. */
+  truncated: boolean;
+}
+
+export interface DiffDto {
+  diff: string;
+  truncated: boolean;
+  base: string;
 }

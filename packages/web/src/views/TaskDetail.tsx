@@ -1,12 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import type { AnalysisDto, MessageDto, TaskDto } from '@jiraffe/core';
+import type { AnalysisDto, MessageDto, TaskDto, TaskExtrasDto } from '@jiraffe/core';
 import { request } from '../api.ts';
 import { useApiMutation, useTaskDetail } from '../queries.ts';
 import { STATUS_VIEW } from '../statusView.ts';
+import {
+  DelegatePanel,
+  DeleteTask,
+  DiffPanel,
+  LogsPanel,
+  ReviewActions,
+} from './ExecutionPanels.tsx';
 
-type Detail = { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto };
+type Detail = { task: TaskDto; messages: MessageDto[]; analysis: AnalysisDto } & TaskExtrasDto;
 
 function RepoEditor({ task }: { task: TaskDto }) {
   const [value, setValue] = useState(task.repoPath ?? '');
@@ -119,8 +126,6 @@ function Chat({ detail }: { detail: Detail }) {
   );
 }
 
-const EMPTY_AREAS = ['Logs', 'Diff'];
-
 const ROLE_LABEL = { analyst: 'Business analyst', architect: 'Architect' } as const;
 
 function ItemList({ title, items }: { title: string; items: string[] }) {
@@ -206,12 +211,11 @@ export function TaskDetail() {
       <p className="body">{task.body}</p>
       <Chat detail={q.data} />
       <AnalysisResult analysis={q.data.analysis} />
-      {EMPTY_AREAS.map((name) => (
-        <section key={name} aria-label={name} className="empty-area">
-          <h3>{name}</h3>
-          <p>Nothing here yet</p>
-        </section>
-      ))}
+      <DelegatePanel task={task} extras={q.data} />
+      <ReviewActions task={task} extras={q.data} />
+      <LogsPanel task={task} />
+      <DiffPanel task={task} />
+      <DeleteTask task={task} hasWorktree={q.data.hasWorktree} />
     </article>
   );
 }

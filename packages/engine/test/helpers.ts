@@ -1,8 +1,8 @@
 import { expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeGit, verdictBlock, type StubScript } from '@jiraffe/adapters/testing';
+import { FakeGit, makeTempRepo, verdictBlock, type StubScript } from '@jiraffe/adapters/testing';
 import type { Verdict } from '@jiraffe/core';
 import { openDb, type Db } from '@jiraffe/db';
 import { createEngine, type Engine } from '../src/index.ts';
@@ -84,8 +84,9 @@ export function newTaskIn(
   engine: Engine,
   status: string,
   pausedFrom: 'analysing' | 'running' = 'analysing',
+  repoPath = '/repos/a',
 ): number {
-  const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath: '/repos/a' });
+  const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath });
   const path =
     status === 'paused_quota' && pausedFrom === 'running'
       ? [...PATHS.running!, 'credit_limit']
@@ -224,3 +225,11 @@ export const eventRows = (h: Harness, type: string, taskId?: number) =>
     payload_json: string | null;
     processed_at: string | null;
   }[];
+
+/** A real temporary repository, with worktrees going to a private folder. Use with `git: realGit`. */
+export function useRepo(h: Harness) {
+  const repo = makeTempRepo();
+  const worktrees = realpathSync(mkdtempSync(join(tmpdir(), 'jiraffe-wt-')));
+  h.engine.updateSetting('worktrees_dir', worktrees);
+  return { ...repo, worktrees };
+}

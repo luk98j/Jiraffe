@@ -21,6 +21,19 @@ function idOf(params: unknown): number {
   return id;
 }
 
+function intParam(
+  v: string | undefined,
+  field: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  if (v === undefined) return fallback;
+  const n = Number(v);
+  if (!/^\d+$/.test(v) || n < min || n > max) throw new ValidationError(`Invalid ${field}`, field);
+  return n;
+}
+
 function text(b: Record<string, unknown>, field: string, label: string, required = true): string {
   const v = b[field];
   if (v === undefined && !required) return '';
@@ -68,8 +81,31 @@ export function registerRoutes(app: FastifyInstance, engine: Engine): void {
     return reply.code(201).send(engine.getTaskDetail(id));
   });
 
+  app.post('/api/tasks/:id/delegate', async (req) => {
+    const id = idOf(req.params);
+    engine.delegate(id);
+    return { task: engine.getTask(id) };
+  });
+
+  app.get('/api/tasks/:id/logs', async (req) => {
+    const q = req.query as { after?: string; limit?: string };
+    return engine.getLogs(
+      idOf(req.params),
+      intParam(q.after, 'after', 0, 0, Number.MAX_SAFE_INTEGER),
+      intParam(q.limit, 'limit', 200, 1, 500),
+    );
+  });
+
+  app.get('/api/tasks/:id/diff', async (req) => engine.getDiff(idOf(req.params)));
+
+  // The worktree and branch are removed only when asked (removeWorktree=1).
   app.delete('/api/tasks/:id', async (req, reply) => {
-    engine.deleteTask(idOf(req.params));
+    const id = idOf(req.params);
+    engine.deleteTask(id);
+    if ((req.query as { removeWorktree?: string }).removeWorktree === '1') {
+      const removalError = await engine.removeWorktreeAndBranch(id);
+      if (removalError) return reply.code(200).send({ removalError });
+    }
     return reply.code(204).send();
   });
 

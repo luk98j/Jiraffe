@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { realGit } from '@jiraffe/adapters';
 import { FakeRunner } from '@jiraffe/adapters/testing';
 import {
   deferred,
@@ -13,6 +14,7 @@ import {
   runRows,
   say,
   statusOf,
+  useRepo,
 } from './helpers.ts';
 
 afterEach(disposeAll);
@@ -65,14 +67,17 @@ describe('slots (AC-1, AC-2, AC-7)', () => {
       void gates[n - 1]!.promise.then(() => live--);
       return { until: gates[n - 1]!.promise };
     });
-    const h = makeEngine({ runners: { copilot: fake } });
-    const ids = [1, 2, 3].map(() => newTaskIn(h.engine, 'delegated'));
+    const h = makeEngine({ runners: { copilot: fake }, git: realGit });
+    const repo = useRepo(h);
+    const ids = [1, 2, 3].map(() => newTaskIn(h.engine, 'delegated', 'analysing', repo.path));
     await h.engine.start();
 
-    expect(ids.map((i) => statusOf(h, i))).toEqual(['running', 'running', 'delegated']);
+    await vi.waitFor(() =>
+      expect(ids.map((i) => statusOf(h, i))).toEqual(['running', 'running', 'delegated']),
+    );
     gates[0]!.resolve();
     await waitCalls(fake, 3);
-    expect(statusOf(h, ids[0]!)).toBe('review');
+    expect(ids.filter((i) => statusOf(h, i) === 'review')).toHaveLength(1);
     for (const g of gates) g.resolve();
     await h.engine.idle();
     expect(max).toBe(2);

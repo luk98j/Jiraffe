@@ -1,4 +1,4 @@
-import { inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm';
 import type { Statement } from 'better-sqlite3';
 import type { Db, Tx } from './client.ts';
 import { events } from './schema.ts';
@@ -39,4 +39,36 @@ export function listUnprocessedEvents(db: Db, limit: number) {
 export function markEventsProcessed(tx: Db | Tx, ids: number[], now: string): void {
   if (ids.length === 0) return;
   tx.update(events).set({ processedAt: now }).where(inArray(events.id, ids)).run();
+}
+
+/** Events of a task after `afterId` (exclusive), oldest first, for paging logs. */
+export function listEventsAfter(
+  db: Db | Tx,
+  taskId: number,
+  types: string[],
+  afterId: number,
+  limit: number,
+) {
+  return db
+    .select({
+      id: events.id,
+      type: events.type,
+      payloadJson: events.payloadJson,
+      createdAt: events.createdAt,
+    })
+    .from(events)
+    .where(and(eq(events.taskId, taskId), inArray(events.type, types), gt(events.id, afterId)))
+    .orderBy(asc(events.id))
+    .limit(limit)
+    .all();
+}
+
+export function latestEventOfType(db: Db | Tx, taskId: number, type: string) {
+  return db
+    .select({ id: events.id, payloadJson: events.payloadJson })
+    .from(events)
+    .where(and(eq(events.taskId, taskId), eq(events.type, type)))
+    .orderBy(desc(events.id))
+    .limit(1)
+    .get();
 }

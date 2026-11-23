@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import type { TaskDto } from '@jiraffe/core';
 import { STATUS_VIEW, type ActionId } from '../statusView.ts';
-import { NEEDS_USER, analyseDisabledReason, delegateDisabledReason } from '../taskView.ts';
+import { NEEDS_USER, analyseDisabledReason } from '../taskView.ts';
 
 const LABEL: Record<ActionId, string> = {
   analyse: 'Analyse',
@@ -31,9 +31,10 @@ interface Props {
   task: TaskDto;
   onEvent(task: TaskDto, event: string): void;
   onDelete(task: TaskDto): void;
+  onDelegate?(task: TaskDto): void;
 }
 
-export function TaskCard({ task, onEvent, onDelete }: Props) {
+export function TaskCard({ task, onEvent, onDelete, onDelegate }: Props) {
   const view = STATUS_VIEW[task.status];
   const highlight = NEEDS_USER.includes(task.status) ? ' card-highlight' : '';
 
@@ -52,8 +53,20 @@ export function TaskCard({ task, onEvent, onDelete }: Props) {
         </Link>
       );
     if (id === 'delegate') {
+      // The reason is the engine's canDelegate() text, shown as the tooltip when disabled.
+      const ok = task.delegate?.ok === true;
       return (
-        <button key={id} type="button" disabled title={delegateDisabledReason(task)}>
+        <button
+          key={id}
+          type="button"
+          disabled={!ok}
+          title={
+            ok
+              ? 'Delegate this task for execution'
+              : (task.delegate?.reason ?? 'Delegate is not available')
+          }
+          onClick={() => onDelegate?.(task)}
+        >
           {label}
         </button>
       );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  delegateTask,
   deleteTask,
   sendEvent,
   startQueue,
@@ -18,7 +19,8 @@ export function Board() {
   const del = useApiMutation((id: number) => deleteTask(id));
   const queue = useQueue();
   const start = useApiMutation(() => startQueue());
-  const error = tasks.error ?? event.error ?? del.error ?? start.error;
+  const delegate = useApiMutation((id: number) => delegateTask(id));
+  const error = tasks.error ?? event.error ?? del.error ?? start.error ?? delegate.error;
 
   const all = tasks.data ?? [];
   const columns = COLUMNS.filter(
@@ -95,6 +97,7 @@ export function Board() {
                     task={t}
                     onEvent={(task, e) => event.mutate({ id: task.id, event: e })}
                     onDelete={(task) => del.mutate(task.id)}
+                    onDelegate={(task) => delegate.mutate(task.id)}
                   />
                 ))
               )}

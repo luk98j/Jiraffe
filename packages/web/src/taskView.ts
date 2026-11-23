@@ -29,9 +29,3 @@ export function analyseDisabledReason(t: TaskDto): string | null {
   if (t.status === 'queued_analysis') return 'Already queued for analysis';
   return null;
 }
-
-export function delegateDisabledReason(t: TaskDto): string {
-  return t.bodyChangedAfterAnalysis
-    ? 'Description changed in Jira: re-run the analysis first'
-    : 'Execution is not available yet';
-}

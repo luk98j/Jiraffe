@@ -11,6 +11,8 @@ import type { JiraClient } from '@jiraffe/jira';
 import { Bus, type Logger } from './bus.ts';
 import type { Ctx } from './context.ts';
 import { getSetting, readSettings, updateSetting } from './settings.ts';
+import { canDelegate, delegate } from './delegate.ts';
+import { getDiff, getLogs, removeWorktreeAndBranch } from './review.ts';
 import { createWorkers } from './workers.ts';
 import { createScheduler } from './scheduler.ts';
 import { startEngine } from './start.ts';
@@ -105,6 +107,11 @@ export function createEngine(opts: EngineOptions) {
       ctx.workers.pump();
     },
     queueState: () => ctx.workers.queueState(),
+    canDelegate: (id: number) => canDelegate(ctx, id),
+    delegate: (id: number) => delegate(ctx, id),
+    getLogs: (id: number, after: number, limit: number) => getLogs(ctx, id, after, limit),
+    getDiff: (id: number) => getDiff(ctx, id),
+    removeWorktreeAndBranch: (id: number) => removeWorktreeAndBranch(ctx, id),
     /** Resolves when no run is live (tests and shutdown). */
     idle: () => ctx.workers.idle(),
     version: opts.version,

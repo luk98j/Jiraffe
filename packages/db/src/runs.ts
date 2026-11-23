@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client.ts';
 import { runs } from './schema.ts';
 
@@ -79,5 +79,23 @@ export function listRuns(db: Db | Tx, taskId: number, kind?: RunKind): RunRow[] 
     .from(runs)
     .where(kind ? and(eq(runs.taskId, taskId), eq(runs.kind, kind)) : eq(runs.taskId, taskId))
     .orderBy(asc(runs.id))
+    .all();
+}
+
+export function setRunWorktree(
+  tx: Db | Tx,
+  id: number,
+  w: { worktreePath: string; branch: string; baseCommit: string },
+): void {
+  tx.update(runs).set(w).where(eq(runs.id, id)).run();
+}
+
+/** The task's execution runs that got a worktree, newest first. */
+export function listWorktreeRuns(db: Db | Tx, taskId: number): RunRow[] {
+  return db
+    .select()
+    .from(runs)
+    .where(and(eq(runs.taskId, taskId), eq(runs.kind, 'execution'), isNotNull(runs.worktreePath)))
+    .orderBy(desc(runs.id))
     .all();
 }
