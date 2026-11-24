@@ -26,7 +26,7 @@ describe('the full flow with fakes (AC-82)', () => {
     engine = createEngine({
       dbPath: join(dir, 't.db'),
       version: 'test',
-      logger: { error() {} },
+      logger: { info() {}, error() {} },
       runners: { copilot: fake },
       git: realGit,
     });

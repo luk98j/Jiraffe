@@ -48,6 +48,7 @@ export interface EngineOptions {
 
 export function createEngine(opts: EngineOptions) {
   const logger = opts.logger ?? {
+    info: (m) => console.info(m),
     error: (m, e) => console.error(m, e instanceof Error ? e.message : ''),
   };
   const db = openDb(opts.dbPath);

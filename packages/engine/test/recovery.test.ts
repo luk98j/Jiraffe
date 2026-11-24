@@ -169,7 +169,7 @@ describe('boot order and isolation (AC-76)', () => {
     const h = makeEngine({
       runners: { copilot: fake },
       jiraClient: jira,
-      logger: { error: (m) => errors.push(m) },
+      logger: { info() {}, error: (m) => errors.push(m) },
     });
     h.engine.updateSetting('jira_base_url', BASE_URL);
     h.engine.updateSetting('auto_analysis', true);

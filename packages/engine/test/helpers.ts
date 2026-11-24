@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeGit, makeTempRepo, verdictBlock, type StubScript } from '@jiraffe/adapters/testing';
 import type { Verdict } from '@jiraffe/core';
 import { openDb, type Db } from '@jiraffe/db';
-import { createEngine, type Engine } from '../src/index.ts';
+import { createEngine, type Engine, type Logger } from '../src/index.ts';
 
 export interface Harness {
   engine: Engine;
@@ -26,7 +26,7 @@ export function makeEngine(
   const engine = createEngine({
     dbPath: path,
     version: 'test',
-    logger: { error() {} },
+    logger: { info() {}, error() {} },
     git: new FakeGit(), // no test touches a real repository unless it asks for one
     ...opts,
   });
@@ -43,6 +43,24 @@ export function makeEngine(
   };
   open.push(h);
   return h;
+}
+
+export interface LogLine {
+  level: 'info' | 'error';
+  text: string;
+  extra: unknown[];
+}
+
+/** A logger that records every call, in order, for tests. */
+export function captureLogger(): { logger: Logger; lines: LogLine[] } {
+  const lines: LogLine[] = [];
+  return {
+    lines,
+    logger: {
+      info: (text) => void lines.push({ level: 'info', text, extra: [] }),
+      error: (text, ...extra) => void lines.push({ level: 'error', text, extra }),
+    },
+  };
 }
 
 export function disposeAll(): void {

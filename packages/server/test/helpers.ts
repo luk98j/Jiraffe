@@ -21,7 +21,7 @@ export function makeApp(opts: Partial<Parameters<typeof createEngine>[0]> = {}):
   const engine = createEngine({
     dbPath: join(dir, 'test.db'),
     version: '1.2.3',
-    logger: { error() {} },
+    logger: { info() {}, error() {} },
     ...opts,
   });
   const app = buildServer(engine);
