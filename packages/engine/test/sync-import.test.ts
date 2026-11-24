@@ -37,7 +37,11 @@ describe('importing new issues (AC-24, AC-81)', () => {
     expect(imported).toHaveLength(3);
     expect(imported.every((j) => j.status === 'new' && j.detail === 'from Jira')).toBe(true);
     expect(syncRuns(h)).toEqual([
-      expect.objectContaining({ taskKey: null, status: null, detail: '3 new, 0 updated' }),
+      expect.objectContaining({
+        taskKey: null,
+        status: null,
+        detail: '3 new, 0 updated; Jira returned 3 issues',
+      }),
     ]);
   });
 
@@ -46,7 +50,7 @@ describe('importing new issues (AC-24, AC-81)', () => {
     jira.setIssues(Array.from({ length: 120 }, (_, i) => issue(i + 1)));
     await h.engine.runTaskSync();
     expect(taskCount(h)).toBe(120);
-    expect(syncRuns(h)[0]!.detail).toBe('120 new, 0 updated');
+    expect(syncRuns(h)[0]!.detail).toBe('120 new, 0 updated; Jira returned 120 issues');
   });
 
   it('creates one task for a duplicate key in one response (AC-82)', async () => {
@@ -74,11 +78,13 @@ describe('importing new issues (AC-24, AC-81)', () => {
     expect(rows[2]!.title).toHaveLength(200_000);
   });
 
-  it('does nothing and writes no sync_run row for an empty result', async () => {
+  it('creates no task and writes one sync_run row for an empty result', async () => {
     const { h } = setup();
     expect(await h.engine.runTaskSync()).toMatchObject({ outcome: 'ok' });
     expect(taskCount(h)).toBe(0);
-    expect(syncRuns(h)).toEqual([]);
+    expect(syncRuns(h)).toEqual([
+      expect.objectContaining({ detail: '0 new, 0 updated; Jira returned 0 issues' }),
+    ]);
   });
 });
 
@@ -126,16 +132,23 @@ describe('filtering (AC-25, AC-26, AC-31)', () => {
   });
 });
 
-describe('repeat syncs (AC-27, AC-28, AC-29, owner decision on silent syncs)', () => {
-  it('a second identical sync creates nothing and writes no journal rows', async () => {
+describe('repeat syncs (AC-27, AC-28, AC-29, journal repeat rule)', () => {
+  it('a second identical sync creates nothing and adds one sync_run row, a third adds none', async () => {
     const { jira, h } = setup();
     jira.setIssues([issue(1), issue(2), issue(3)]);
     await h.engine.runTaskSync();
-    const journal = h.engine.listJournal({}).length;
+    const taskRows = () =>
+      ['task_imported', 'task_updated_from_jira', 'closed_in_jira'].map((a) => journalCount(h, a));
+    const before = taskRows();
     await h.engine.runTaskSync();
     expect(taskCount(h)).toBe(3);
-    expect(h.engine.listJournal({})).toHaveLength(journal);
-    expect(syncRuns(h)).toHaveLength(1);
+    expect(taskRows()).toEqual(before);
+    expect(syncRuns(h).map((r) => r.detail)).toEqual([
+      '0 new, 0 updated; Jira returned 3 issues',
+      '3 new, 0 updated; Jira returned 3 issues',
+    ]);
+    await h.engine.runTaskSync();
+    expect(syncRuns(h)).toHaveLength(2);
   });
 
   it('does not re-import a soft-deleted board task', async () => {
@@ -211,7 +224,7 @@ describe('state', () => {
       lastRunAt: NOW,
       lastError: null,
       lastSkippedAt: null,
-      lastResult: '1 new, 0 updated',
+      lastResult: '1 new, 0 updated; Jira returned 1 issues',
     });
   });
 });

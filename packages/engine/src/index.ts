@@ -64,6 +64,7 @@ export function createEngine(opts: EngineOptions) {
     logger,
     sync: {
       inFlight: false,
+      lastJournaled: { task: null, comment: null },
       state: {
         state: 'idle',
         lastRunAt: null,

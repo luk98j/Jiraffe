@@ -322,7 +322,7 @@ describe('sync (AC-43, AC-79)', () => {
     expect((await h.req('GET', '/api/tasks')).body.tasks).toHaveLength(1);
     expect((await h.req('GET', '/api/sync')).body).toMatchObject({
       state: 'idle',
-      lastResult: '1 new, 0 updated',
+      lastResult: '1 new, 0 updated; Jira returned 1 issues',
     });
   });
 });

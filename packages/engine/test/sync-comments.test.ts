@@ -52,6 +52,12 @@ describe('which tasks are queried (AC-38, AC-50)', () => {
     rawTask(h.raw, { jiraKey: 'P-2', status: 'waiting_user' });
     expect(await h.engine.runCommentSync()).toEqual({ outcome: 'not_configured' });
     expect(jira.calls).toEqual([]);
+    expect(h.engine.listJournal({ action: 'sync_skipped' })).toEqual([
+      expect.objectContaining({
+        taskKey: null,
+        detail: 'Jira not configured: jira_base_url is empty',
+      }),
+    ]);
   });
 });
 
@@ -107,15 +113,23 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     ).toEqual({ c: 0 });
   });
 
-  it('a second run adds no duplicates and no journal rows', async () => {
+  it('a second run adds no duplicates and one empty sync_run row, a third adds none', async () => {
     const { jira, h } = setup();
     const id = rawTask(h.raw, { jiraKey: 'P-4', status: 'running' });
     jira.setComments('P-4', [c('10')]);
     await h.engine.runCommentSync();
-    const journal = h.engine.listJournal({}).length;
+    const commentRows = journalCount(h, 'comment_added');
     await h.engine.runCommentSync();
     expect(h.engine.listMessages(id)).toHaveLength(1);
-    expect(h.engine.listJournal({})).toHaveLength(journal);
+    expect(journalCount(h, 'comment_added')).toBe(commentRows);
+    const details = () =>
+      h.engine
+        .listJournal({ action: 'sync_run' })
+        .reverse()
+        .map((j) => j.detail);
+    expect(details()).toEqual(['comments: 1 new', 'comments: 0 new']);
+    await h.engine.runCommentSync();
+    expect(details()).toEqual(['comments: 1 new', 'comments: 0 new']);
   });
 
   it('adds only the new comment on a later run', async () => {
@@ -152,7 +166,9 @@ describe('storing comments (AC-39, AC-40, AC-41)', () => {
     jira.setComments('P-2', []);
     await h.engine.runCommentSync();
     expect(h.engine.getTask(id).status).toBe('waiting_user');
-    expect(journalCount(h, 'sync_run')).toBe(0);
+    expect(h.engine.listJournal({ action: 'sync_run' })).toEqual([
+      expect.objectContaining({ taskKey: null, detail: 'comments: 0 new' }),
+    ]);
   });
 
   it('skips a task deleted between fetch and apply', async () => {
