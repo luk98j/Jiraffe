@@ -30,6 +30,7 @@ export function Journal() {
               <th>Task key</th>
               <th>Status</th>
               <th>Action</th>
+              <th>Detail</th>
             </tr>
           </thead>
           <tbody>
@@ -39,6 +40,7 @@ export function Journal() {
                 <td>{e.taskKey ?? ''}</td>
                 <td>{e.status ?? ''}</td>
                 <td>{e.action}</td>
+                <td>{e.detail ?? ''}</td>
               </tr>
             ))}
           </tbody>

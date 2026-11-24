@@ -105,7 +105,11 @@ export function SyncPanel() {
   return (
     <section aria-label="Jira sync" className="sync-panel">
       <h3>Jira sync</h3>
-      {s?.state === 'not_configured' && <p>Jira not configured</p>}
+      {s?.state === 'not_configured' && (
+        <p>
+          Jira not configured: jira_base_url is empty. Set jira_base_url below to start syncing.
+        </p>
+      )}
       {s?.state === 'error' && <p className="error">{s.lastError}</p>}
       {s && (
         <p>

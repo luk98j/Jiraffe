@@ -45,12 +45,17 @@ const entry = (id: number, over: Partial<JournalDto>): JournalDto => ({
 
 describe('Journal view (AC-71)', () => {
   const rows = [
-    entry(3, { taskKey: null, status: null, action: 'sync_run' }),
+    entry(3, {
+      taskKey: null,
+      status: null,
+      action: 'sync_run',
+      detail: '0 new, 0 updated; Jira returned 0 issues',
+    }),
     entry(2, { taskKey: 'PROJ-2', status: 'analysing', action: 'status_changed' }),
     entry(1, {}),
   ];
 
-  it('shows date, key, status and action in the order returned, with an empty key cell', async () => {
+  it('shows date, key, status, action and detail in the order returned, with empty key and detail cells', async () => {
     renderApp('/journal', (req) =>
       req.path === '/api/journal' ? { body: { entries: rows } } : undefined,
     );
@@ -60,15 +65,23 @@ describe('Journal view (AC-71)', () => {
       'Task key',
       'Status',
       'Action',
+      'Detail',
     ]);
     const cells = screen.getAllByTestId('journal-row').map((r) =>
       within(r)
         .getAllByRole('cell')
         .map((c) => c.textContent),
     );
-    expect(cells[0]).toEqual(['2026-11-23 10:00:00', '', '', 'sync_run']);
-    expect(cells[1]).toEqual(['2026-11-22 10:00:00', 'PROJ-2', 'analysing', 'status_changed']);
+    expect(cells[0]).toEqual([
+      '2026-11-23 10:00:00',
+      '',
+      '',
+      'sync_run',
+      '0 new, 0 updated; Jira returned 0 issues',
+    ]);
+    expect(cells[1]).toEqual(['2026-11-22 10:00:00', 'PROJ-2', 'analysing', 'status_changed', '']);
     expect(cells[2]![3]).toBe('task_imported');
+    expect(cells[2]![4]).toBe('');
   });
 
   it('sends the filters as query parameters and shows the empty state', async () => {

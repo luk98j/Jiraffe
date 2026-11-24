@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createHttpJiraClient } from '@jiraffe/jira';
+import { createHttpJiraClient, type JiraClient } from '@jiraffe/jira';
 import { FakeJiraClient } from '@jiraffe/jira/testing';
 import {
   BASE_URL,
@@ -50,7 +50,7 @@ function expectClean(h: ReturnType<typeof makeEngine>, lines: LogLine[]) {
   for (const secret of SECRETS) expect(everything).not.toContain(secret);
 }
 
-function setup(jira: FakeJiraClient | undefined) {
+function setup(jira: JiraClient | undefined) {
   const { logger, lines } = captureLogger();
   const h = makeEngine({ ...(jira ? { jiraClient: jira } : {}), logger });
   h.engine.updateSetting('jira_base_url', BASE_URL);

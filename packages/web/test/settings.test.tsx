@@ -137,7 +137,12 @@ describe('Sync panel', () => {
         lastResult: null,
       }),
     );
-    expect(await screen.findAllByText('Jira not configured')).not.toHaveLength(0);
+    const panel = await screen.findByRole('region', { name: 'Jira sync' });
+    await waitFor(() =>
+      expect(panel).toHaveTextContent(
+        'Jira not configured: jira_base_url is empty. Set jira_base_url below to start syncing.',
+      ),
+    );
   });
 
   it('shows the last result and triggers Sync now', async () => {
@@ -148,10 +153,15 @@ describe('Sync panel', () => {
         lastRunAt: '2026-11-21T10:00:00.000Z',
         lastError: null,
         lastSkippedAt: null,
-        lastResult: '3 new, 0 updated',
+        lastResult: '0 new, 0 updated; Jira returned 0 issues',
       }),
     );
-    expect(await screen.findByText(/3 new, 0 updated/)).toBeInTheDocument();
+    const panel = await screen.findByRole('region', { name: 'Jira sync' });
+    await waitFor(() =>
+      expect(panel).toHaveTextContent(
+        'State: idle, last run 2026-11-21T10:00:00.000Z (0 new, 0 updated; Jira returned 0 issues)',
+      ),
+    );
     await user.click(screen.getByRole('button', { name: 'Sync now' }));
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.path === '/api/sync')).toBe(true),
