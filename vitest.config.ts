@@ -10,6 +10,7 @@ export default defineConfig({
     passWithNoTests: true,
     projects: [
       { test: { name: 'root', include: ['tests/**/*.test.ts'], setupFiles } },
+      pkg('adapters'),
       pkg('core'),
       pkg('db'),
       pkg('engine'),

@@ -1,7 +1,9 @@
 import type { Db, Tx } from '@jiraffe/db';
 import type { JiraClient } from '@jiraffe/jira';
 import type { SyncStateDto } from '@jiraffe/core';
+import type { AgentId, AgentRunner, GitRunner } from '@jiraffe/adapters';
 import type { Bus, DomainEvent, Logger } from './bus.ts';
+import type { Workers } from './workers.ts';
 
 export interface Ctx {
   db: Db;
@@ -10,6 +12,9 @@ export interface Ctx {
   logger: Logger;
   version: string;
   jiraClient?: JiraClient;
+  runners: Partial<Record<AgentId, AgentRunner>>;
+  git: GitRunner;
+  workers: Workers;
   /** Mutable in-memory sync state shared by task and comment sync. */
   sync: { state: SyncStateDto; inFlight: boolean };
 }
@@ -18,6 +23,7 @@ export interface Ctx {
 export class Outbox {
   private events: DomainEvent[] = [];
   private dirty = false;
+  private logged = new Set<number>();
 
   emitEvent(e: DomainEvent): void {
     this.events.push(e);
@@ -27,8 +33,14 @@ export class Outbox {
     this.dirty = true;
   }
 
+  /** Output was stored for this task; sent as the `log` topic, not as a board-wide change. */
+  log(taskId: number): void {
+    this.logged.add(taskId);
+  }
+
   flush(bus: Bus): void {
     for (const e of this.events) bus.emitEvent(e);
+    for (const id of this.logged) bus.emitLog(id);
     if (this.dirty) bus.emitChanged();
   }
 }

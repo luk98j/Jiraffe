@@ -56,24 +56,38 @@ export const messages = sqliteTable(
   (t) => [unique('messages_task_comment').on(t.taskId, t.jiraCommentId)],
 );
 
-export const runs = sqliteTable('runs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  taskId: integer('task_id')
-    .notNull()
-    .references(() => tasks.id),
-  kind: text('kind', { enum: ['analysis', 'execution'] }).notNull(),
-  agent: text('agent'),
-  sessionId: text('session_id'),
-  status: text('status'),
-  pid: integer('pid'),
-  maxCredits: real('max_credits'),
-  creditsUsed: real('credits_used'),
-  endReason: text('end_reason', {
-    enum: ['completed', 'credit_limit', 'quota', 'crashed', 'cancelled'],
-  }),
-  startedAt: text('started_at'),
-  finishedAt: text('finished_at'),
-});
+export const runs = sqliteTable(
+  'runs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    taskId: integer('task_id')
+      .notNull()
+      .references(() => tasks.id),
+    kind: text('kind', { enum: ['analysis', 'execution'] }).notNull(),
+    agent: text('agent'),
+    sessionId: text('session_id'),
+    status: text('status', { enum: ['running', 'finished'] }),
+    pid: integer('pid'),
+    maxCredits: real('max_credits'),
+    creditsUsed: real('credits_used'),
+    endReason: text('end_reason', {
+      enum: ['completed', 'credit_limit', 'quota', 'crashed', 'cancelled'],
+    }),
+    startedAt: text('started_at'),
+    finishedAt: text('finished_at'),
+    /** Analysis: `{ role, verdict, answer }`. */
+    resultJson: text('result_json'),
+    worktreePath: text('worktree_path'),
+    branch: text('branch'),
+    baseCommit: text('base_commit'),
+    /** The branch (and worktree) of this task was created by Jiraffe, so Jiraffe may remove it. */
+    branchCreated: integer('branch_created', { mode: 'boolean' }),
+  },
+  (t) => [
+    index('runs_task_kind_idx').on(t.taskId, t.kind),
+    index('runs_kind_finished_idx').on(t.kind, t.finishedAt),
+  ],
+);
 
 export const events = sqliteTable(
   'events',
@@ -87,7 +101,11 @@ export const events = sqliteTable(
     processedAt: text('processed_at'),
     createdAt: text('created_at').notNull(),
   },
-  (t) => [index('events_task_idx').on(t.taskId), index('events_processed_idx').on(t.processedAt)],
+  (t) => [
+    index('events_task_idx').on(t.taskId),
+    index('events_processed_idx').on(t.processedAt),
+    index('events_task_type_idx').on(t.taskId, t.type, t.id),
+  ],
 );
 
 // No foreign key: journal rows survive task purge.

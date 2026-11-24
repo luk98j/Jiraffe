@@ -3,6 +3,28 @@ import { z } from 'zod';
 const posInt = z.number().int().min(1);
 const nonEmpty = z.string().trim().min(1);
 
+/** Placeholders the execution prompt template may use; anything else is rejected. */
+export const EXECUTION_PLACEHOLDERS = ['task_key', 'title', 'body', 'context'] as const;
+
+export const DEFAULT_EXECUTION_TEMPLATE = [
+  'You are working on task {{task_key}}: {{title}}',
+  '',
+  '{{body}}',
+  '',
+  'Context snapshot (also in .orchestrator/context.md):',
+  '{{context}}',
+  '',
+  'Work only inside the current directory. Commit your work to the current branch. Do not push.',
+].join('\n');
+
+function hasValidPlaceholders(v: string): boolean {
+  const used = [...v.matchAll(/\{\{([^}]*)\}\}/g)].map((m) => m[1] as string);
+  return (
+    used.includes('context') &&
+    used.every((p) => (EXECUTION_PLACEHOLDERS as readonly string[]).includes(p))
+  );
+}
+
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
 /** Credentials are sent to this URL, so it must be https (http only for a local test server). */
@@ -37,6 +59,7 @@ export const SETTINGS = {
   max_parallel_execution: def({ schema: posInt, default: 2, input: 'number' }),
   default_max_credits: def({ schema: z.number().positive(), default: 2.0, input: 'number' }),
   quota_retry_minutes: def({ schema: posInt, default: 60, input: 'number' }),
+  // Empty until the owner confirms the real usage-limit messages (spec section 12 item 3).
   quota_error_patterns: def({ schema: z.array(nonEmpty), default: [] as string[], input: 'json' }),
   jira_base_url: def({ schema: url, default: '', input: 'text' }),
   jira_projects: def({
@@ -70,6 +93,16 @@ export const SETTINGS = {
     default: null as number | null,
     input: 'number',
   }),
+  run_timeout_minutes: def({ schema: posInt.max(1440), default: 30, input: 'number' }),
+  execution_prompt_template: def({
+    schema: nonEmpty.refine(
+      hasValidPlaceholders,
+      'Use only {{task_key}}, {{title}}, {{body}} and {{context}}; {{context}} is required',
+    ),
+    default: DEFAULT_EXECUTION_TEMPLATE,
+    input: 'text',
+  }),
+  agent: def({ schema: z.enum(['copilot', 'claude']), default: 'copilot' as const, input: 'text' }),
   local_task_counter: def({
     schema: z.number().int().min(0),
     default: 0,

@@ -18,5 +18,14 @@ export const TRANSITION_EVENTS = [
 ] as const;
 export type TransitionEvent = (typeof TRANSITION_EVENTS)[number];
 
-/** `user_comment` is stored in `events` but is not a state transition. */
-export type EventType = TransitionEvent | 'user_comment';
+/** Stored in `events` but not state transitions. */
+export const EXTRA_EVENT_TYPES = [
+  'user_comment',
+  'agent_output',
+  'log_truncated',
+  'run_error',
+  'recovered_to_queued_analysis',
+  'recovered_to_delegated',
+] as const;
+
+export type EventType = TransitionEvent | (typeof EXTRA_EVENT_TYPES)[number];

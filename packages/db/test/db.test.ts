@@ -3,7 +3,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SETTINGS, SETTING_KEYS } from '@jiraffe/core';
-import { migrateDb, openDb, seedSettings, type Db } from '../src/index.ts';
+import {
+  countOpenRuns,
+  finishRun,
+  getTaskDto,
+  hasFinishedAnalysis,
+  insertEvent,
+  insertMessage,
+  insertRun,
+  listMessages,
+  listRuns,
+  listUnprocessedEvents,
+  markEventsProcessed,
+  migrateDb,
+  nextClaimCandidate,
+  openDb,
+  seedSettings,
+  setRunPid,
+  type Db,
+} from '../src/index.ts';
 
 let dir: string;
 let db: Db;
@@ -67,6 +85,11 @@ describe('migrations (AC-6, AC-7)', () => {
       'end_reason',
       'started_at',
       'finished_at',
+      'result_json',
+      'worktree_path',
+      'branch',
+      'base_commit',
+      'branch_created',
     ]);
     expect(cols('events')).toEqual([
       'id',
@@ -79,6 +102,15 @@ describe('migrations (AC-6, AC-7)', () => {
     expect(cols('journal')).toEqual(['id', 'at', 'task_key', 'status', 'action', 'detail']);
     expect(cols('ignored_jira_keys')).toEqual(['jira_key', 'deleted_at']);
     expect(cols('settings')).toEqual(['key', 'value_json']);
+  });
+
+  it('indexes the columns the claim, counts and log paging filter on', () => {
+    const idx = (table: string) =>
+      (raw(db).pragma(`index_list(${table})`) as { name: string }[]).map((i) => i.name);
+    expect(idx('runs')).toEqual(
+      expect.arrayContaining(['runs_task_kind_idx', 'runs_kind_finished_idx']),
+    );
+    expect(idx('events')).toContain('events_task_type_idx');
   });
 
   it('uses WAL mode and enforces foreign keys', () => {
@@ -153,5 +185,123 @@ describe('task constraints (AC-30)', () => {
         )
         .run(),
     ).toThrow(/CHECK/);
+  });
+});
+
+describe('runs, claims and events helpers', () => {
+  const task = (
+    status: string,
+    over: { priority?: number; updatedAt?: string; deleted?: boolean } = {},
+  ) =>
+    Number(
+      raw(db)
+        .prepare(
+          `INSERT INTO tasks (source, local_key, title, status, priority, deleted_at, created_at, updated_at)
+           VALUES ('local', ?, 't', ?, ?, ?, '2026-01-01T00:00:00.000Z', ?)`,
+        )
+        .run(
+          `LOC-${Math.random().toString(36).slice(2, 8)}`,
+          status,
+          over.priority ?? 0,
+          over.deleted ? '2026-01-02T00:00:00.000Z' : null,
+          over.updatedAt ?? '2026-01-01T00:00:00.000Z',
+        ).lastInsertRowid,
+    );
+  const run = (
+    taskId: number,
+    kind: 'analysis' | 'execution' = 'analysis',
+    at = '2026-01-03T00:00:00.000Z',
+  ) => insertRun(db, { taskId, kind, agent: 'copilot', maxCredits: 2, startedAt: at });
+
+  it('inserts an open run, counts it per kind, and finishes it', () => {
+    const t = task('analysing');
+    const r = run(t);
+    expect(countOpenRuns(db, 'analysis')).toBe(1);
+    expect(countOpenRuns(db, 'execution')).toBe(0);
+    setRunPid(db, r, 4242);
+    expect(listRuns(db, t, 'analysis')[0]).toMatchObject({ id: r, status: 'running', pid: 4242 });
+    finishRun(db, r, {
+      endReason: 'completed',
+      finishedAt: '2026-01-03T00:01:00.000Z',
+      resultJson: '{"a":1}',
+    });
+    expect(countOpenRuns(db, 'analysis')).toBe(0);
+    expect(listRuns(db, t, 'analysis')[0]).toMatchObject({
+      status: 'finished',
+      endReason: 'completed',
+      pid: null,
+      resultJson: '{"a":1}',
+    });
+  });
+
+  it('claims queued tasks by priority, then updated_at, skipping deleted ones', () => {
+    task('queued_analysis', { priority: 5, updatedAt: '2026-01-01T00:00:00.000Z' });
+    const late = task('queued_analysis', { priority: 1, updatedAt: '2026-01-05T00:00:00.000Z' });
+    const early = task('queued_analysis', { priority: 1, updatedAt: '2026-01-02T00:00:00.000Z' });
+    task('queued_analysis', { priority: 0, deleted: true });
+    expect(nextClaimCandidate(db, 'analysis')?.taskId).toBe(early);
+    run(early);
+    expect(nextClaimCandidate(db, 'analysis')?.taskId).toBe(late);
+  });
+
+  it('treats analysing or running tasks without an open run as orphans, and excludes tasks with one', () => {
+    const a = task('analysing');
+    const x = task('running');
+    expect(nextClaimCandidate(db, 'analysis')).toMatchObject({ taskId: a, status: 'analysing' });
+    expect(nextClaimCandidate(db, 'execution')).toMatchObject({ taskId: x, status: 'running' });
+    run(a);
+    expect(nextClaimCandidate(db, 'analysis')).toBeUndefined();
+    const d = task('delegated', { priority: -1 });
+    expect(nextClaimCandidate(db, 'execution')).toMatchObject({ taskId: d, status: 'delegated' });
+  });
+
+  it('hasNewComment compares against the start of the last completed analysis', () => {
+    const t = task('ready_to_delegate');
+    const msg = (at: string) =>
+      insertMessage(db, { taskId: t, role: 'user', source: 'app', content: 'c', createdAt: at });
+    const r = run(t, 'analysis', '2026-01-03T00:00:00.000Z');
+    expect(getTaskDto(db, t)?.hasNewComment).toBe(false);
+    msg('2026-01-03T00:00:30.000Z'); // arrived while the run was running
+    finishRun(db, r, { endReason: 'completed', finishedAt: '2026-01-03T00:01:00.000Z' });
+    expect(getTaskDto(db, t)?.hasNewComment).toBe(true);
+    const r2 = run(t, 'analysis', '2026-01-03T00:02:00.000Z');
+    finishRun(db, r2, { endReason: 'completed', finishedAt: '2026-01-03T00:03:00.000Z' });
+    expect(getTaskDto(db, t)?.hasNewComment).toBe(false);
+  });
+
+  it('marks messages that arrived after the latest run started as waiting for the next run', () => {
+    const t = task('analysing');
+    const m = (at: string, role: 'user' | 'agent' = 'user') =>
+      insertMessage(db, { taskId: t, role, source: 'app', content: at, createdAt: at });
+    m('2026-01-02T00:00:00.000Z');
+    run(t, 'analysis', '2026-01-03T00:00:00.000Z');
+    m('2026-01-03T00:00:10.000Z');
+    m('2026-01-03T00:00:20.000Z', 'agent');
+    expect(listMessages(db, t).map((x) => x.waitsForNextRun)).toEqual([false, true, false]);
+  });
+
+  it('hasFinishedAnalysis means a completed analysis, not just a finished one', () => {
+    const t = task('analysing');
+    const r = run(t);
+    expect(hasFinishedAnalysis(db, t)).toBe(false);
+    finishRun(db, r, { endReason: 'crashed', finishedAt: '2026-01-03T00:01:00.000Z' });
+    expect(hasFinishedAnalysis(db, t)).toBe(false);
+    finishRun(db, run(t), { endReason: 'completed', finishedAt: '2026-01-03T00:05:00.000Z' });
+    expect(hasFinishedAnalysis(db, t)).toBe(true);
+  });
+
+  it('lists unprocessed events in order and marks them processed', () => {
+    const t = task('new');
+    insertEvent(db, { taskId: t, type: 'enqueue', createdAt: 'a' });
+    insertEvent(db, { taskId: t, type: 'agent_output', createdAt: 'b', processedAt: 'b' });
+    insertEvent(db, { taskId: t, type: 'retry', createdAt: 'c' });
+    const open = listUnprocessedEvents(db, 10);
+    expect(open.map((e) => e.type)).toEqual(['enqueue', 'retry']);
+    markEventsProcessed(
+      db,
+      open.map((e) => e.id),
+      'now',
+    );
+    expect(listUnprocessedEvents(db, 10)).toEqual([]);
   });
 });

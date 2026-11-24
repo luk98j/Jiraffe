@@ -1,7 +1,9 @@
 import { expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FakeGit, makeTempRepo, verdictBlock, type StubScript } from '@jiraffe/adapters/testing';
+import type { Verdict } from '@jiraffe/core';
 import { openDb, type Db } from '@jiraffe/db';
 import { createEngine, type Engine } from '../src/index.ts';
 
@@ -21,7 +23,13 @@ export function makeEngine(
 ): Harness {
   const folder = dir ?? mkdtempSync(join(tmpdir(), 'jiraffe-engine-'));
   const path = join(folder, 'test.db');
-  const engine = createEngine({ dbPath: path, version: 'test', logger: { error() {} }, ...opts });
+  const engine = createEngine({
+    dbPath: path,
+    version: 'test',
+    logger: { error() {} },
+    git: new FakeGit(), // no test touches a real repository unless it asks for one
+    ...opts,
+  });
   const second = openDb(path);
   const h: Harness = {
     engine,
@@ -76,8 +84,9 @@ export function newTaskIn(
   engine: Engine,
   status: string,
   pausedFrom: 'analysing' | 'running' = 'analysing',
+  repoPath = '/repos/a',
 ): number {
-  const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath: '/repos/a' });
+  const task = engine.createLocalTask({ title: 'T', description: 'D', repoPath });
   const path =
     status === 'paused_quota' && pausedFrom === 'running'
       ? [...PATHS.running!, 'credit_limit']
@@ -161,3 +170,66 @@ export const journalCount = (h: Harness, action: string) =>
   (h.raw.prepare('SELECT count(*) c FROM journal WHERE action = ?').get(action) as { c: number }).c;
 export const taskCount = (h: Harness) =>
   (h.raw.prepare('SELECT count(*) c FROM tasks').get() as { c: number }).c;
+
+export function deferred<T = void>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+/** An agent answer that ends with a verdict block, as stdout lines. */
+export function say(v: Partial<Verdict> = {}, prose = 'My analysis.'): StubScript {
+  return {
+    lines: `${prose}\n\n${verdictBlock(v)}`.split('\n').map((text) => ({ stream: 'stdout', text })),
+  };
+}
+
+/** A local task with a repo, moved to `queued_analysis`. */
+export function queuedTask(engine: Engine, title = 'T', body = 'D'): number {
+  const t = engine.createLocalTask({ title, description: body, repoPath: '/repos/a' });
+  engine.transition(t.id, 'enqueue');
+  return t.id;
+}
+
+export const statusOf = (h: Harness, id: number) =>
+  (h.raw.prepare('SELECT status FROM tasks WHERE id = ?').get(id) as { status: string }).status;
+
+export const runRows = (h: Harness, taskId?: number) =>
+  h.raw
+    .prepare(
+      `SELECT id, task_id, kind, agent, status, end_reason, pid, result_json, finished_at
+       FROM runs ${taskId ? 'WHERE task_id = ?' : ''} ORDER BY id`,
+    )
+    .all(...(taskId ? [taskId] : [])) as {
+    id: number;
+    task_id: number;
+    kind: string;
+    agent: string | null;
+    status: string | null;
+    end_reason: string | null;
+    pid: number | null;
+    result_json: string | null;
+    finished_at: string | null;
+  }[];
+
+export const eventRows = (h: Harness, type: string, taskId?: number) =>
+  h.raw
+    .prepare(
+      `SELECT id, task_id, payload_json, processed_at FROM events WHERE type = ? ${taskId ? 'AND task_id = ?' : ''} ORDER BY id`,
+    )
+    .all(...(taskId ? [type, taskId] : [type])) as {
+    id: number;
+    task_id: number;
+    payload_json: string | null;
+    processed_at: string | null;
+  }[];
+
+/** A real temporary repository, with worktrees going to a private folder. Use with `git: realGit`. */
+export function useRepo(h: Harness) {
+  const repo = makeTempRepo();
+  const worktrees = realpathSync(mkdtempSync(join(tmpdir(), 'jiraffe-wt-')));
+  h.engine.updateSetting('worktrees_dir', worktrees);
+  return { ...repo, worktrees };
+}

@@ -3,9 +3,9 @@
 Thanks for your interest in contributing. This guide describes how to propose
 changes. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-The project is at an early stage and has no code, tooling or test setup yet.
-Where this guide mentions checks or tests, it means those that exist in the
-repository at the time of your change.
+The repository has code, tests and tooling (lint, formatting, build, typecheck;
+see the [README](README.md) for the commands). Where this guide mentions checks
+or tests, it means those that exist in the repository at the time of your change.
 
 ## Reporting bugs and proposing features
 

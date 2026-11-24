@@ -44,7 +44,16 @@ export class Bus {
     return this.subscribe('changed', fn);
   }
 
-  listenerCount(topic: 'event' | 'changed'): number {
+  /** Output of a run was stored: a separate, cheap topic so a log flush never refetches the whole board. */
+  onLog(fn: (e: { taskId: number }) => unknown) {
+    return this.subscribe('log', fn);
+  }
+
+  emitLog(taskId: number): void {
+    this.emitter.emit('log', { taskId });
+  }
+
+  listenerCount(topic: 'event' | 'changed' | 'log'): number {
     return this.emitter.listenerCount(topic);
   }
 

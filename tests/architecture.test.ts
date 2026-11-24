@@ -4,14 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PACKAGES = ['core', 'db', 'engine', 'jira', 'server', 'web'] as const;
+const PACKAGES = ['adapters', 'core', 'db', 'engine', 'jira', 'server', 'web'] as const;
 
-// Allowed workspace imports (AC-3). `adapters` joins this table in a later step.
+// Allowed workspace imports (AC-3).
 const ALLOWED: Record<string, string[]> = {
+  adapters: ['core'],
   core: [],
   db: ['core'],
   jira: ['core'],
-  engine: ['core', 'db', 'jira'],
+  engine: ['core', 'db', 'jira', 'adapters'],
   server: ['core', 'engine'],
   web: ['core'],
 };
@@ -70,7 +71,7 @@ const rootOf = (spec: string) =>
   spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : (spec.split('/')[0] as string);
 
 describe('workspace layout (AC-2)', () => {
-  it('has exactly the six packages and core has no workspace dependency', () => {
+  it('has exactly the seven packages and core has no workspace dependency', () => {
     expect(readdirSync(join(ROOT, 'packages')).sort()).toEqual([...PACKAGES].sort());
     for (const pkg of PACKAGES) {
       const json = JSON.parse(readFileSync(join(ROOT, 'packages', pkg, 'package.json'), 'utf8'));
@@ -108,6 +109,14 @@ describe('dependency rules (AC-3)', () => {
       const owner = OWNERS[rootOf(i.spec)];
       return owner !== undefined && owner !== i.pkg;
     });
+    expect(violations).toEqual([]);
+  });
+
+  it('only adapters imports node:child_process', () => {
+    const violations = allImports().filter(
+      (i) =>
+        (i.spec === 'node:child_process' || i.spec === 'child_process') && i.pkg !== 'adapters',
+    );
     expect(violations).toEqual([]);
   });
 

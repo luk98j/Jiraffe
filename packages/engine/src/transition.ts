@@ -75,3 +75,47 @@ export function transition(
 ): TransitionResult {
   return write(ctx, (tx, outbox) => applyTransition(ctx, tx, outbox, taskId, event, opts));
 }
+
+/**
+ * Boot recovery for a task whose run died with the previous process: `analysing` goes back
+ * to `queued_analysis`, `running` to `delegated`. Section 4 has no such edges, so this
+ * deliberately bypasses `resolveTransition` (the core table stays untouched). Same
+ * guarantees as a transition: task, event and journal row in the caller's transaction.
+ */
+export function recoverTask(
+  ctx: Ctx,
+  tx: Tx,
+  outbox: Outbox,
+  taskId: number,
+): TransitionResult | null {
+  const task = getTaskDto(tx, taskId);
+  if (!task || task.deletedAt) return null;
+  const to: Status | null =
+    task.status === 'analysing'
+      ? 'queued_analysis'
+      : task.status === 'running'
+        ? 'delegated'
+        : null;
+  if (!to) return null;
+  const from = task.status;
+  const now = ctx.clock().toISOString();
+  applyStatusChange(tx, taskId, {
+    status: to,
+    statusBeforePause: task.statusBeforePause,
+    pauseReason: task.pauseReason,
+    resumeAt: task.resumeAt,
+    updatedAt: now,
+  });
+  const type = to === 'queued_analysis' ? 'recovered_to_queued_analysis' : 'recovered_to_delegated';
+  insertEvent(tx, { taskId, type, payload: { from, to }, createdAt: now });
+  insertJournal(tx, {
+    at: now,
+    taskKey: task.key,
+    status: to,
+    action: 'status_changed',
+    detail: `${from} to ${to} (recovery)`,
+  });
+  outbox.emitEvent({ taskId, type, from, to });
+  outbox.changed();
+  return { changed: true, from, to };
+}

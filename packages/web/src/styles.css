@@ -320,6 +320,15 @@ label {
 .toolbar label {
   cursor: pointer;
 }
+.queue-control {
+  margin-left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.queue-note {
+  color: var(--muted);
+}
 
 /* ---------- Board ---------- */
 
@@ -812,4 +821,77 @@ section > ul li button {
   .setting-row label {
     padding-top: 0;
   }
+}
+
+/* ---------- Analysis result ---------- */
+
+.analysis {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.analysis-run + .analysis-run {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.analysis-run h4,
+.analysis-run h5 {
+  margin: 0 0 4px;
+}
+.verdict {
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.verdict-ready {
+  color: #4ade80;
+}
+.verdict-needs {
+  color: #fb923c;
+}
+.verdict-pending {
+  color: var(--muted);
+}
+.waits-tag {
+  color: #fbbf24;
+}
+
+/* ---------- Execution panels ---------- */
+
+.delegate,
+.logs,
+.diff,
+.run-error {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.blocked {
+  color: #fb923c;
+  font-weight: 600;
+}
+.warning {
+  color: #fbbf24;
+}
+.run-error h3 {
+  color: #f87171;
+}
+.logs pre,
+.diff pre,
+.run-error pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin: 0;
+}
+.log-stderr {
+  color: #fca5a5;
+}
+
+.pause-reason {
+  color: #fbbf24;
+  font-size: 12px;
+  margin: 4px 0;
 }

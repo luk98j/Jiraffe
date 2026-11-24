@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
+    "@jiraffe/adapters": "workspace:*",
     "@jiraffe/core": "workspace:*",
     "@jiraffe/engine": "workspace:*",
     "@jiraffe/jira": "workspace:*",

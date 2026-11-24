@@ -196,19 +196,42 @@ describe('card actions (AC-63, AC-64, AC-65)', () => {
     expect(within(await card('LOC-0003')).getByRole('button', { name: 'Analyse' })).toBeEnabled();
   });
 
-  it('shows Delegate only on ready tasks, always disabled, with the right reason', async () => {
+  it('shows Delegate only on ready tasks; disabled with the engine reason as tooltip (AC-40)', async () => {
+    const reason = 'Description changed in Jira, re-run the analysis';
     board([
-      task({ id: 1, status: 'ready_to_delegate' }),
-      task({ id: 2, status: 'ready_to_delegate', bodyChangedAfterAnalysis: true }),
+      task({
+        id: 1,
+        status: 'ready_to_delegate',
+        delegate: { ok: true, reason: null, permissions: [] },
+      }),
+      task({
+        id: 2,
+        status: 'ready_to_delegate',
+        delegate: { ok: false, reason, permissions: [] },
+      }),
       task({ id: 3 }),
     ]);
-    const d1 = within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' });
-    expect(d1).toBeDisabled();
-    expect(d1).toHaveAttribute('title', 'Execution is not available yet');
+    expect(within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' })).toBeEnabled();
     const d2 = within(await card('LOC-0002')).getByRole('button', { name: 'Delegate' });
     expect(d2).toBeDisabled();
-    expect(d2).toHaveAttribute('title', 'Description changed in Jira: re-run the analysis first');
+    expect(d2).toHaveAttribute('title', reason);
     expect(within(await card('LOC-0003')).queryByRole('button', { name: 'Delegate' })).toBeNull();
+  });
+
+  it('clicking an enabled Delegate posts to the delegate endpoint', async () => {
+    const { user, calls } = board(
+      [
+        task({
+          id: 1,
+          status: 'ready_to_delegate',
+          delegate: { ok: true, reason: null, permissions: [] },
+        }),
+      ],
+      (req) =>
+        req.method === 'POST' && req.path === '/api/tasks/1/delegate' ? { body: {} } : undefined,
+    );
+    await user.click(within(await card('LOC-0001')).getByRole('button', { name: 'Delegate' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/api/tasks/1/delegate')).toBe(true));
   });
 
   it('Answer, Show diff, Logs and Show error link to the task detail', async () => {
@@ -366,5 +389,97 @@ describe('robustness (AC-73)', () => {
       'Cannot reach the Jiraffe server. Showing the last loaded data.',
     );
     expect(screen.getByTestId('card-LOC-0001')).toBeInTheDocument();
+  });
+});
+
+describe('Start queue (AC-10)', () => {
+  const queueState = (over: object = {}) => ({
+    started: false,
+    autoAnalysis: false,
+    active: { analysis: 0, execution: 0 },
+    max: { analysis: 2, execution: 2 },
+    ...over,
+  });
+  const withQueue = (state: () => object) => (req: import('./helpers.tsx').Req) => {
+    if (req.method === 'GET' && req.path === '/api/queue') return { body: state() };
+    if (req.method === 'POST' && req.path === '/api/queue/start')
+      return { body: { started: true } };
+    return undefined;
+  };
+
+  it('starts the queue for the session when tasks are queued', async () => {
+    const { user, calls } = board(
+      [task({ id: 1, status: 'queued_analysis' })],
+      withQueue(queueState),
+    );
+    const button = await screen.findByRole('button', { name: 'Start queue' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(
+      screen.getByText('Starts analysis of queued tasks for this session only'),
+    ).toBeInTheDocument();
+    await user.click(button);
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/queue/start')).toBe(true),
+    );
+  });
+
+  it.each([
+    ['nothing is queued', [task({ id: 1, status: 'new' })], {}, 'No task is queued for analysis'],
+    [
+      'it already started',
+      [task({ id: 1, status: 'queued_analysis' })],
+      { started: true },
+      'The queue is already started for this session',
+    ],
+    [
+      'automatic analysis is on',
+      [task({ id: 1, status: 'queued_analysis' })],
+      { autoAnalysis: true },
+      'Automatic analysis is on, so queued tasks start by themselves',
+    ],
+  ])('is disabled with a reason when %s', async (_n, tasks, state, reason) => {
+    board(
+      tasks,
+      withQueue(() => queueState(state)),
+    );
+    const button = await screen.findByRole('button', { name: 'Start queue' });
+    await waitFor(() => expect(button).toHaveAttribute('title', reason));
+    expect(button).toBeDisabled();
+  });
+});
+
+describe('paused tasks', () => {
+  const paused = task({
+    id: 1,
+    status: 'paused_quota',
+    statusBeforePause: 'running',
+    pauseReason: 'Credit limit reached',
+    resumeAt: '2026-11-23T12:00:00.000Z',
+  });
+
+  it('shows why the task is paused and when it resumes, with an icon', async () => {
+    board([paused]);
+    const c = await card('LOC-0001');
+    expect(within(c).getByTestId('pause-reason')).toHaveTextContent(
+      'Credit limit reached · resumes 2026-11-23T12:00:00.000Z',
+    );
+  });
+
+  it.each([
+    ['Resume', 'resume'],
+    ['Cancel', 'cancel'],
+  ])('%s on a paused card sends the %s event (AC-69)', async (label, event) => {
+    const { user, calls } = board([paused], (req) =>
+      req.method === 'POST' && req.path === '/api/tasks/1/events' ? { body: {} } : undefined,
+    );
+    await user.click(within(await card('LOC-0001')).getByRole('button', { name: label }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/tasks/1/events')?.body).toEqual({ event }),
+    );
+  });
+
+  it('shows no pause line for other statuses', async () => {
+    board([task({ id: 2, status: 'running', pauseReason: 'stale' })]);
+    expect(within(await card('LOC-0002')).queryByTestId('pause-reason')).toBeNull();
   });
 });

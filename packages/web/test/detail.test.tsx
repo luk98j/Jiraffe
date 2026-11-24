@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import type { MessageDto, TaskDto } from '@jiraffe/core';
+import { describe, expect, it, vi } from 'vitest';
+import type { AnalysisDto, MessageDto, TaskDto } from '@jiraffe/core';
 import { renderApp, task } from './helpers.tsx';
 
 const msg = (id: number, over: Partial<MessageDto> = {}): MessageDto => ({
@@ -10,11 +10,28 @@ const msg = (id: number, over: Partial<MessageDto> = {}): MessageDto => ({
   source: 'app',
   content: `m${id}`,
   createdAt: `2026-11-20T10:0${id}:00.000Z`,
+  waitsForNextRun: false,
   ...over,
 });
 
-function server(initial: { task: TaskDto; messages: MessageDto[] }) {
-  const state = { ...initial, messages: [...initial.messages] };
+const EXTRAS = {
+  delegate: { ok: false, reason: 'not ready' as string | null, permissions: [] as string[] },
+  lastError: null as { message: string; tail: string | null } | null,
+  restartsInWorktree: false,
+  hasWorktree: false,
+};
+
+function server(
+  initial: { task: TaskDto; messages: MessageDto[]; analysis?: AnalysisDto } & Partial<
+    typeof EXTRAS
+  >,
+) {
+  const state = {
+    analysis: { runs: [] } as AnalysisDto,
+    ...EXTRAS,
+    ...initial,
+    messages: [...initial.messages],
+  };
   const handler = (req: import('./helpers.tsx').Req) => {
     if (req.method === 'GET' && req.path === `/api/tasks/${state.task.id}`) return { body: state };
     if (req.method === 'POST' && req.path.endsWith('/messages')) {
@@ -143,5 +160,334 @@ describe('chat (AC-68)', () => {
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Internal server error');
     await waitFor(() => expect(screen.queryByText('will fail')).toBeNull());
+  });
+});
+
+describe('analysis result and waiting messages', () => {
+  const run = (over: Partial<AnalysisDto['runs'][number]>): AnalysisDto['runs'][number] => ({
+    runId: 1,
+    role: 'analyst',
+    agent: 'copilot',
+    endReason: 'completed',
+    finishedAt: '2026-11-20T10:05:00.000Z',
+    answer: null,
+    verdict: null,
+    ...over,
+  });
+
+  it('shows per-agent verdict with icon and text, summary, questions and permissions', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'waiting_user' }),
+      messages: [],
+      analysis: {
+        runs: [
+          run({
+            verdict: {
+              verdict: 'NEEDS_INFO',
+              questions: ['Which API?'],
+              missing: ['Acceptance criteria'],
+              permissions: ['read: src/**'],
+              summary: 'Needs a decision',
+            },
+          }),
+          run({
+            runId: 2,
+            role: 'architect',
+            verdict: {
+              verdict: 'READY',
+              questions: [],
+              missing: [],
+              permissions: [],
+              summary: 'Looks fine',
+            },
+          }),
+        ],
+      },
+    });
+    renderApp('/tasks/1', handler);
+    const region = await screen.findByRole('region', { name: 'Analysis result' });
+    const runs = within(region).getAllByTestId('analysis-run');
+    expect(within(runs[0]!).getByText('Business analyst')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Needs information')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Needs a decision')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Which API?')).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('Acceptance criteria')).toBeInTheDocument();
+    expect(
+      within(runs[0]!).getByText('Permissions proposed by the agent (not applied)'),
+    ).toBeInTheDocument();
+    expect(within(runs[0]!).getByText('read: src/**')).toBeInTheDocument();
+    expect(within(runs[1]!).getByText('Architect')).toBeInTheDocument();
+    expect(within(runs[1]!).getByText('Ready')).toBeInTheDocument();
+    expect(within(region).queryByText('Nothing here yet')).toBeNull();
+  });
+
+  it('shows a run without a verdict as running or as no verdict', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'analysing' }),
+      messages: [],
+      analysis: {
+        runs: [
+          run({ runId: 1, finishedAt: null, endReason: null }),
+          run({ runId: 2, endReason: 'crashed' }),
+        ],
+      },
+    });
+    renderApp('/tasks/1', handler);
+    const region = await screen.findByRole('region', { name: 'Analysis result' });
+    expect(within(region).getByText('Running')).toBeInTheDocument();
+    expect(within(region).getByText('No verdict')).toBeInTheDocument();
+  });
+
+  it('tags a message that waits for the next run', async () => {
+    const { handler } = server({
+      task: task({ id: 1, status: 'analysing' }),
+      messages: [msg(1, { waitsForNextRun: true }), msg(2)],
+    });
+    renderApp('/tasks/1', handler);
+    const items = await screen.findAllByTestId('message');
+    expect(within(items[0]!).getByText(/Waits for next run/)).toBeInTheDocument();
+    expect(within(items[1]!).queryByText(/Waits for next run/)).toBeNull();
+  });
+});
+
+describe('delegate, logs, diff, errors and delete', () => {
+  const line = (id: number, text: string, stream: 'stdout' | 'stderr' = 'stdout') => ({
+    id,
+    runId: 1,
+    stream,
+    text,
+    at: 'x',
+  });
+  function withApi(
+    init: Parameters<typeof server>[0],
+    api: (req: import('./helpers.tsx').Req) => ReturnType<import('./helpers.tsx').Handler> = () =>
+      undefined,
+  ) {
+    const { handler } = server(init);
+    return (req: import('./helpers.tsx').Req) => api(req) ?? handler(req);
+  }
+
+  it('shows permissions and allowed tools, and a disabled Delegate with the reason in text and tooltip (AC-40)', async () => {
+    const reason = 'Tool restriction flag is not confirmed (spec section 12 item 1)';
+    renderApp(
+      '/tasks/1',
+      withApi(
+        {
+          task: task({ id: 1, status: 'ready_to_delegate' }),
+          messages: [],
+          delegate: { ok: false, reason, permissions: ['read: src/**'] },
+        },
+        (req) =>
+          req.path === '/api/settings'
+            ? { body: { values: { allowed_tools: ['git status'] }, readOnly: [], problems: [] } }
+            : undefined,
+      ),
+    );
+    const region = await screen.findByRole('region', { name: 'Delegate' });
+    expect(within(region).getByText('read: src/**')).toBeInTheDocument();
+    expect(await within(region).findByText('git status')).toBeInTheDocument();
+    expect(within(region).getByText(`Cannot delegate: ${reason}`)).toBeInTheDocument();
+    const button = within(region).getByRole('button', { name: 'Delegate' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', reason);
+  });
+
+  it('enables Delegate when allowed and posts to the endpoint', async () => {
+    const { user, calls } = renderApp(
+      '/tasks/1',
+      withApi(
+        {
+          task: task({ id: 1, status: 'ready_to_delegate' }),
+          messages: [],
+          delegate: { ok: true, reason: null, permissions: [] },
+        },
+        (req) =>
+          req.method === 'POST' && req.path === '/api/tasks/1/delegate' ? { body: {} } : undefined,
+      ),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Delegate' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/api/tasks/1/delegate')).toBe(true));
+  });
+
+  it('shows log lines with their stream and the truncation notice, paged by event id', async () => {
+    const { calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
+        req.path === '/api/tasks/1/logs'
+          ? {
+              body: {
+                lines: [line(1, 'hello'), line(2, 'oops', 'stderr')],
+                truncated: true,
+                hasMore: false,
+              },
+            }
+          : undefined,
+      ),
+    );
+    const region = await screen.findByRole('region', { name: 'Logs' });
+    expect(await within(region).findByText('[stdout] hello')).toBeInTheDocument();
+    expect(within(region).getByText('[stderr] oops')).toBeInTheDocument();
+    expect(within(region).getByText(/Log storage stopped at 5 MiB/)).toBeInTheDocument();
+    expect(calls.find((c) => c.path.endsWith('/logs'))?.query.get('after')).toBe('0');
+  });
+
+  it('fetches only the new lines when the logs refresh, and follows hasMore across pages', async () => {
+    const all = [line(1, 'one'), line(2, 'two'), line(3, 'three')];
+    const { queryClient, calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) => {
+        if (req.path !== '/api/tasks/1/logs') return undefined;
+        const after = Number(req.query.get('after'));
+        const rest = all.filter((l) => l.id > after);
+        const page = after === 0 ? rest.slice(0, 1) : rest;
+        return { body: { lines: page, truncated: false, hasMore: after === 0 && rest.length > 1 } };
+      }),
+    );
+    await screen.findByText('[stdout] three');
+    expect(calls.filter((c) => c.path.endsWith('/logs')).map((c) => c.query.get('after'))).toEqual([
+      '0',
+      '1',
+    ]);
+    all.push(line(4, 'four'));
+    await queryClient.invalidateQueries({ queryKey: ['logs', 1] });
+    await screen.findByText('[stdout] four');
+    const afters = calls.filter((c) => c.path.endsWith('/logs')).map((c) => c.query.get('after'));
+    expect(afters.at(-1)).toBe('3');
+    expect(screen.getAllByText(/\[stdout\]/)).toHaveLength(4);
+  });
+
+  it('does not poll logs while the browser tab is hidden, and fetches when it is shown', async () => {
+    const state = { visible: 'hidden' };
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => state.visible,
+    });
+    try {
+      const { calls } = renderApp(
+        '/tasks/1',
+        withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
+          req.path === '/api/tasks/1/logs'
+            ? { body: { lines: [line(1, 'late')], truncated: false, hasMore: false } }
+            : undefined,
+        ),
+      );
+      await screen.findByRole('region', { name: 'Logs' });
+      expect(calls.some((c) => c.path.endsWith('/logs'))).toBe(false);
+      state.visible = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(await screen.findByText('[stdout] late')).toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
+  it('shows only the newest 500 lines and says so', async () => {
+    const many = Array.from({ length: 520 }, (_, i) => line(i + 1, `l${i + 1}`));
+    renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'running' }), messages: [] }, (req) =>
+        req.path === '/api/tasks/1/logs'
+          ? { body: { lines: many, truncated: false, hasMore: false } }
+          : undefined,
+      ),
+    );
+    expect(await screen.findByText('Showing the last 500 of 520 lines')).toBeInTheDocument();
+    expect(screen.getAllByText(/\[stdout\]/)).toHaveLength(500);
+    expect(screen.queryByText('[stdout] l20')).toBeNull();
+  });
+
+  it('does not refetch the diff on a board-wide refresh', async () => {
+    const { queryClient, calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'review' }), messages: [] }, (req) =>
+        req.path === '/api/tasks/1/diff'
+          ? { body: { diff: '+x', truncated: false, base: 'abc' } }
+          : undefined,
+      ),
+    );
+    await screen.findByText('+x');
+    await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'diff' });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/tasks/1').length).toBeGreaterThan(1),
+    );
+    expect(calls.filter((c) => c.path === '/api/tasks/1/diff')).toHaveLength(1);
+  });
+
+  it('shows the diff with a truncation note, and Accept sends review_accepted', async () => {
+    const { user, calls } = renderApp(
+      '/tasks/1',
+      withApi({ task: task({ id: 1, status: 'review' }), messages: [] }, (req) => {
+        if (req.path === '/api/tasks/1/diff')
+          return { body: { diff: '+added line', truncated: true, base: 'abc' } };
+        if (req.method === 'POST' && req.path === '/api/tasks/1/events') return { body: {} };
+        return undefined;
+      }),
+    );
+    expect(await screen.findByText('+added line')).toBeInTheDocument();
+    expect(screen.getByText(/The diff was cut at 1 MiB/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/tasks/1/events')?.body).toEqual({
+        event: 'review_accepted',
+      }),
+    );
+  });
+
+  it('shows the error of a failed task and the restart warning', async () => {
+    renderApp(
+      '/tasks/1',
+      withApi({
+        task: task({ id: 1, status: 'failed' }),
+        messages: [],
+        lastError: { message: 'git worktree add failed', tail: 'fatal: bad' },
+        restartsInWorktree: true,
+      }),
+    );
+    expect(await screen.findByText('git worktree add failed')).toBeInTheDocument();
+    expect(screen.getByText('fatal: bad')).toBeInTheDocument();
+    expect(screen.getByText(/Execution restarts in the existing worktree/)).toBeInTheDocument();
+  });
+
+  it('offers to remove the worktree on delete only when there is one, default off', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { user, calls } = renderApp(
+      '/tasks/1',
+      withApi(
+        { task: task({ id: 1, status: 'review' }), messages: [], hasWorktree: true },
+        (req) => (req.method === 'DELETE' ? { status: 204 } : undefined),
+      ),
+    );
+    const box = await screen.findByLabelText('Also remove the worktree and branch');
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: 'Delete task' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'DELETE')?.query.get('removeWorktree')).toBe('1'),
+    );
+    confirm.mockRestore();
+  });
+
+  it('has no delete section for a task without a worktree', async () => {
+    renderApp('/tasks/1', withApi({ task: task({ id: 1 }), messages: [] }));
+    await screen.findByRole('region', { name: 'Logs' });
+    expect(screen.queryByLabelText('Also remove the worktree and branch')).toBeNull();
+  });
+});
+
+describe('paused task detail', () => {
+  it('shows the fixed pause reason and the resume time', async () => {
+    const { handler } = server({
+      task: task({
+        id: 1,
+        status: 'paused_quota',
+        pauseReason: 'Usage limit reached',
+        resumeAt: '2026-11-23T12:00:00.000Z',
+      }),
+      messages: [],
+    });
+    renderApp('/tasks/1', handler);
+    expect(await screen.findByTestId('pause-reason')).toHaveTextContent(
+      'Usage limit reached · resumes 2026-11-23T12:00:00.000Z',
+    );
   });
 });

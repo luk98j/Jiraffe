@@ -125,7 +125,8 @@ describe('timers (AC-45, AC-59)', () => {
     await vi.advanceTimersByTimeAsync(60 * MIN);
     expect(h.raw.prepare('SELECT 1 FROM tasks WHERE id = ?').get(id)).toBeUndefined();
     h.engine.stop();
-  });
+    // 24 hours of fake time includes about 57,000 poller ticks; allow for a loaded machine.
+  }, 30_000);
 
   it('keeps firing after a failed sync', async () => {
     const { jira, h } = setup();

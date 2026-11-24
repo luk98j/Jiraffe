@@ -18,8 +18,8 @@ class FakeEventSource {
   close() {
     this.closed = true;
   }
-  emit(type: string) {
-    this.listeners.get(type)?.({ data: '{}' });
+  emit(type: string, data = '{}') {
+    this.listeners.get(type)?.({ data });
   }
 }
 
@@ -57,6 +57,28 @@ describe('live updates (AC-69 client)', () => {
   it('invalidates all queries on a change event', () => {
     const { es, spy } = mount();
     es.emit('change');
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a change leaves the logs and diff queries alone, they have their own refresh', () => {
+    const { es, spy } = mount();
+    es.emit('change');
+    const predicate = (spy.mock.calls[0]![0] as { predicate: (q: unknown) => boolean }).predicate;
+    const q = (key: string) => ({ queryKey: [key, 1] });
+    expect([predicate(q('tasks')), predicate(q('task')), predicate(q('queue'))]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect([predicate(q('logs')), predicate(q('diff'))]).toEqual([false, false]);
+  });
+
+  it("a log event refreshes only that task's logs", () => {
+    const { es, spy } = mount();
+    es.emit('log', '{"taskId":4}');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['logs', 4] });
+    es.emit('log', 'not json');
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
