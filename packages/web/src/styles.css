@@ -769,7 +769,7 @@ section > ul li button {
 
 .setting-row {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) auto auto;
+  grid-template-columns: 260px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
   padding: 10px 0;
@@ -787,6 +787,33 @@ section > ul li button {
   margin: 9px 0 0;
   justify-self: start;
 }
+.settings-section {
+  max-width: 920px;
+  margin-bottom: 28px;
+}
+.settings-section > h3 {
+  margin: 0 0 8px;
+}
+.settings-help {
+  margin: 4px 0 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.settings-help code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.settings-section .sync-panel h4 {
+  margin: 0 0 6px;
+}
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+}
+
 .setting-row > small {
   padding-top: 8px;
 }
