@@ -45,7 +45,9 @@ describe('updating from Jira (AC-32, AC-35)', () => {
       }),
     ]);
     expect(JSON.stringify(rows)).not.toContain('secret');
-    expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe('0 new, 1 updated');
+    expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe(
+      '0 new, 1 updated; Jira returned 1 issues',
+    );
   });
 
   it('lists only the changed field', async () => {
@@ -137,7 +139,7 @@ describe('closed in Jira (AC-36)', () => {
       expect.objectContaining({ taskKey: 'PROJ-2', status: 'new' }),
     ]);
     expect(h.engine.listJournal({ action: 'sync_run' })[0]!.detail).toBe(
-      '0 new, 0 updated, 1 closed',
+      '0 new, 0 updated, 1 closed; Jira returned 1 issues',
     );
   });
 
@@ -148,7 +150,17 @@ describe('closed in Jira (AC-36)', () => {
     expect(row(h, id('PROJ-1')).jira_closed).toBe(1);
     await h.engine.runTaskSync();
     expect(journalCount(h, 'closed_in_jira')).toBe(1);
-    expect(journalCount(h, 'sync_run')).toBe(2);
+    expect(journalCount(h, 'sync_run')).toBe(3);
+    expect(
+      h.engine
+        .listJournal({ action: 'sync_run' })
+        .reverse()
+        .map((r) => r.detail),
+    ).toEqual([
+      '1 new, 0 updated; Jira returned 1 issues',
+      '0 new, 0 updated, 1 closed; Jira returned 1 issues',
+      '0 new, 0 updated; Jira returned 1 issues',
+    ]);
     void jira;
   });
 

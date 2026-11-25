@@ -56,7 +56,10 @@ describe('secrets never reach the database or logs (AC-74)', () => {
     engine = createEngine({
       dbPath: join(dir, 't.db'),
       version: 'test',
-      logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
+      logger: {
+        info: (m) => logs.push([m, undefined]),
+        error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]),
+      },
     });
     const app = buildServer(engine);
     await app.inject({
@@ -122,7 +125,7 @@ describe('journal never holds free text (AC-75)', () => {
       dbPath: join(dir, 't.db'),
       version: 'test',
       jiraClient: jira,
-      logger: { error() {} },
+      logger: { info() {}, error() {} },
     });
     engine.updateSetting('jira_base_url', BASE);
     const M = {
@@ -214,7 +217,10 @@ describe('analysis runs keep secrets and free text out (AC-83, AC-31)', () => {
     engine = createEngine({
       dbPath: join(dir, 't.db'),
       version: 'test',
-      logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
+      logger: {
+        info: (m) => logs.push([m, undefined]),
+        error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]),
+      },
       runners: { copilot: fake },
     });
     engine.updateSetting('auto_analysis', true);
@@ -263,7 +269,10 @@ describe('quota and recovery keep secrets and output text out (AC-83)', () => {
     engine = createEngine({
       dbPath: join(dir, 't.db'),
       version: 'test',
-      logger: { error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]) },
+      logger: {
+        info: (m) => logs.push([m, undefined]),
+        error: (m, e) => logs.push([m, e instanceof Error ? e.message : e]),
+      },
       runners: { copilot: fake },
     });
     engine.updateSetting('auto_analysis', true);

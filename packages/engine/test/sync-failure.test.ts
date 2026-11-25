@@ -7,10 +7,13 @@ afterEach(disposeAll);
 
 const TOKEN = 'tok-SECRET-9876';
 const EMAIL = 'owner@example.com';
+// Every table a sync could write except the journal, which gets exactly one sync_failed row.
 const snapshot = (h: ReturnType<typeof makeEngine>) =>
-  ['tasks', 'journal', 'events', 'messages', 'settings', 'ignored_jira_keys'].map((t) =>
+  ['tasks', 'events', 'messages', 'settings', 'ignored_jira_keys'].map((t) =>
     h.raw.prepare(`SELECT * FROM ${t}`).all(),
   );
+const journalRows = (h: ReturnType<typeof makeEngine>) =>
+  h.raw.prepare('SELECT * FROM journal ORDER BY id').all();
 
 describe('failed syncs (AC-44)', () => {
   it.each([
@@ -47,10 +50,22 @@ describe('failed syncs (AC-44)', () => {
       });
       h.engine.updateSetting('jira_base_url', BASE_URL);
       const before = snapshot(h);
+      const journalBefore = journalRows(h);
       const res = await h.engine.runTaskSync();
       expect(res.outcome).toBe('error');
       expect(snapshot(h)).toEqual(before);
       const state = h.engine.syncState();
+      expect(journalRows(h)).toEqual([
+        ...journalBefore,
+        expect.objectContaining({
+          action: 'sync_failed',
+          detail: state.lastError,
+          task_key: null,
+          status: null,
+        }),
+      ]);
+      for (const secret of [TOKEN, EMAIL, 'example.atlassian.net'])
+        expect(JSON.stringify(journalRows(h))).not.toContain(secret);
       expect(state.state).toBe('error');
       expect(state.lastError).toBeTruthy();
       for (const secret of [TOKEN, EMAIL, 'example.atlassian.net'])
@@ -86,8 +101,16 @@ describe('failed syncs (AC-44)', () => {
       throw new JiraError('server', 'Jira returned an error (HTTP 500)');
     };
     const before = snapshot(h);
+    const journalBefore = journalRows(h);
     expect((await h.engine.runTaskSync()).outcome).toBe('error');
     expect(snapshot(h)).toEqual(before);
+    expect(journalRows(h)).toEqual([
+      ...journalBefore,
+      expect.objectContaining({
+        action: 'sync_failed',
+        detail: 'Jira returned an error (HTTP 500)',
+      }),
+    ]);
     jira.getIssues = orig;
   });
 });
@@ -107,7 +130,10 @@ describe('overlapping syncs (AC-79)', () => {
       state: 'running',
       lastSkippedAt: '2026-11-21T10:00:00.000Z',
     });
-    expect(h.engine.listJournal({})).toHaveLength(journal);
+    expect(h.engine.listJournal({})).toHaveLength(journal + 1);
+    expect(h.engine.listJournal({ action: 'sync_skipped' })).toEqual([
+      expect.objectContaining({ taskKey: null, detail: 'another sync is running' }),
+    ]);
     expect(jira.calls.filter((c) => c.method === 'searchPage')).toHaveLength(1);
     jira.release();
     expect((await first).outcome).toBe('ok');

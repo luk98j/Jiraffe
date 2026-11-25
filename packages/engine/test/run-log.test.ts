@@ -96,7 +96,7 @@ describe('RunLog (AC-49, AC-50, AC-83)', () => {
 
   it('survives a storage failure without throwing', () => {
     const errors: unknown[] = [];
-    const h = makeEngine({ logger: { error: (m) => errors.push(m) } });
+    const h = makeEngine({ logger: { info() {}, error: (m) => errors.push(m) } });
     const id = queuedTask(h.engine);
     const log = new RunLog(h.engine.ctx, id, 1);
     h.raw.exec('DROP TABLE events');

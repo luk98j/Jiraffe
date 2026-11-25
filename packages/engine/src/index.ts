@@ -47,8 +47,12 @@ export interface EngineOptions {
 }
 
 export function createEngine(opts: EngineOptions) {
+  const clock = opts.clock ?? (() => new Date());
+  // Default console logger: every line starts with the ISO time it was logged.
   const logger = opts.logger ?? {
-    error: (m, e) => console.error(m, e instanceof Error ? e.message : ''),
+    info: (m) => console.info(`${clock().toISOString()} info: ${m}`),
+    error: (m, e) =>
+      console.error(`${clock().toISOString()} error: ${m}`, e instanceof Error ? e.message : ''),
   };
   const db = openDb(opts.dbPath);
   migrateDb(db);
@@ -56,10 +60,11 @@ export function createEngine(opts: EngineOptions) {
   const ctx: Ctx = {
     db,
     bus: new Bus(logger),
-    clock: opts.clock ?? (() => new Date()),
+    clock,
     logger,
     sync: {
       inFlight: false,
+      lastJournaled: { task: null, comment: null },
       state: {
         state: 'idle',
         lastRunAt: null,

@@ -177,7 +177,9 @@ A small app-wide log. Each row has the task number, the task status after the ac
 | Action | Task key | Status | Example detail |
 | --- | --- | --- | --- |
 | `app_started` | none | none | version |
-| `sync_run` | none | none | 3 new, 2 updated |
+| `sync_run` | none | none | `3 new, 2 updated; Jira returned 5 issues` (task sync) or `comments: 2 new` (comment sync) |
+| `sync_failed` | none | none | safe error message of a failed sync |
+| `sync_skipped` | none | none | `Jira not configured: jira_base_url is empty` or `another sync is running` |
 | `task_imported` | PROJ-123 | `new` | from Jira |
 | `task_created` | LOC-0004 | `new` | manual |
 | `task_updated_from_jira` | PROJ-123 | current | title, body |
@@ -255,7 +257,7 @@ All UI text is in English. The main screen is a board with columns in flow order
 - Delegate is disabled with a tooltip carrying the reason returned by `canDelegate()`.
 - “Add task” is always visible above the board. A filter hides `done` and `cancelled`.
 - Views: Board, Task detail (chat, analysis result, logs, diff), Deleted (last 4 weeks, with Restore), Journal, Settings.
-- Journal view: a table of date, task key, status and action, newest first, with filters by task key and by action.
+- Journal view: a table of date, task key, status, action and detail, newest first, with filters by task key and by action.
 - State changes reach the UI over SSE without a page refresh.
 
 ## 10. Settings and security
@@ -280,6 +282,8 @@ All settings live in the `settings` table, are editable in the UI, and need no r
 | `retention_days` | `28` | Deleted and closed-in-Jira task retention |
 | `journal_retention_days` | empty | Keep journal forever when empty |
 | `local_task_counter` | `0` | Last used `LOC` number |
+
+The Settings view groups the keys into five sections: Jira connection (with the Jira sync panel and a note that `JIRA_EMAIL` and `JIRA_API_TOKEN` come from the server environment), Agent, Usage limits, Repositories and execution, and Data retention. Each section has one Save button that sends one `PUT /api/settings/:key` per edited key.
 
 **Security**
 
@@ -308,6 +312,10 @@ All settings live in the `settings` table, are editable in the UI, and need no r
 - D3. New endpoints: `POST /api/queue/start`, `GET /api/queue`, `POST /api/tasks/:id/delegate` (409 with the reason when blocked), `GET /api/tasks/:id/logs?after=&limit=` (returns `lines`, `truncated`, `hasMore`), `GET /api/tasks/:id/diff`, and `DELETE /api/tasks/:id?removeWorktree=1` (also removes that task's worktree and branch; answers 204 normally, but when the worktree or branch removal is refused or fails, for example because the branch was not created by Jiraffe or the agent is still stopping, it answers 200 with `{removalError}` and the task stays deleted). The generic events endpoint still accepts UI events only.
 - D4. The worker claim goes through `transition()` (`analysis_started`) instead of the raw SQL in section 5.
 - D5. Recovery moves outside the section 4 table: `analysing -> queued_analysis` and `running -> delegated`, made only at boot by `recoverTask` in `packages/engine/src/transition.ts`, with event types `recovered_to_queued_analysis` and `recovered_to_delegated`. Three more non-transition event types exist: `agent_output`, `log_truncated`, `run_error`.
+- D6. Empty, failed and skipped syncs are now journaled (section 7). A sync with no changes writes a `sync_run` row, and two new actions exist: `sync_failed` and `sync_skipped`. A row is written when the sync changed something, or when its `<action>: <detail>` text differs from the last journaled one of the same kind (task or comment sync) in this process; the memory is in RAM, so the first outcome after a start is always journaled, and it is updated only after the row is committed. A failing journal write is logged and never changes the sync outcome. The task-sync `sync_run` detail gained `; Jira returned N issues`. The engine `Logger` gained an `info` level, and every sync writes start, finish (with the JQL for task sync), failure, not-configured and skipped lines to the server log.
+- D7. The Journal view (section 9) gained a Detail column.
+- D8. Settings (section 10) is grouped into five sections with one Save per section and a static credentials help text; the API is unchanged, so a section Save sends one `PUT` per edited key and can be partly saved. The Jira sync panel moved inside the Jira connection section.
+- D9. The default server logger prefixes every line with an ISO 8601 timestamp and the level. Sync failures log the safe message plus the error class name, never the raw error, so credentials cannot reach the log through an error text.
 - X1. `delegated -> failed` is not in section 4. When execution cannot start (repo missing, git error, bad path, unverified adapter), one transaction applies `execution_started` and then `failed`, so the task is never seen as running but the journal shows both moves.
 - X3 to X5. `runs.agent` holds the adapter id and the analyst or architect role is in `result_json`; the architect run is skipped when the analyst does not return a clean READY; a credit limit during analysis uses the `quota` event.
 - Environment stripping. `JIRA_EMAIL` and `JIRA_API_TOKEN` are removed from the environment of agent and git child processes (`packages/adapters/src/spawner.ts`), and their exact values are redacted from stored logs.

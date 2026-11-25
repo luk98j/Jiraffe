@@ -49,7 +49,7 @@ describe('write() outbox', () => {
 
   it('does not let a handler exception reach the caller or other handlers', () => {
     const logged: unknown[] = [];
-    const h = makeEngine({ logger: { error: (...a) => logged.push(a) } });
+    const h = makeEngine({ logger: { info() {}, error: (...a) => logged.push(a) } });
     const seen: string[] = [];
     h.engine.bus.onEvent(() => {
       throw new Error('handler failed');

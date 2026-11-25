@@ -16,7 +16,12 @@ export interface Ctx {
   git: GitRunner;
   workers: Workers;
   /** Mutable in-memory sync state shared by task and comment sync. */
-  sync: { state: SyncStateDto; inFlight: boolean };
+  sync: {
+    state: SyncStateDto;
+    inFlight: boolean;
+    /** Last journaled outcome per sync kind ("<action>: <detail>"); identical repeats are not journaled. */
+    lastJournaled: { task: string | null; comment: string | null };
+  };
 }
 
 /** Collects notifications during a transaction; they are sent only after commit. */
