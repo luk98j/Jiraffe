@@ -4,7 +4,9 @@ import { createEngine } from '@jiraffe/engine';
 import { buildServer, getPort, listen, HOST } from '../src/index.ts';
 
 const newApp = () =>
-  buildServer(createEngine({ dbPath: ':memory:', version: '1.2.3', logger: { info() {}, error() {} } }));
+  buildServer(
+    createEngine({ dbPath: ':memory:', version: '1.2.3', logger: { info() {}, error() {} } }),
+  );
 
 let app: ReturnType<typeof buildServer> | undefined;
 afterEach(async () => {
